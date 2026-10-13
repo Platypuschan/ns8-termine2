@@ -9,6 +9,8 @@ ${PREVIOUS_IMAGE_URL}    ${EMPTY}
 ${SCENARIO}          install
 ${HOST}              termine.test
 ${module_id}         ${EMPTY}
+${ADMIN_USER}        admin
+${ADMIN_PASSWORD}    Nethesis,1234
 &{konten_vorher}
 
 *** Keywords ***
@@ -65,6 +67,14 @@ Konten prüfen
     Login gelingt    ${config.mitarbeiter}[0][login]    ${config.mitarbeiter}[0][passwort]
     Login scheitert    admin@localhost    admin
     RETURN    &{config}
+
+Login to cluster-admin
+    New Page    https://${NODE_ADDR}/cluster-admin/
+    Fill Text    text="Username"    ${ADMIN_USER}
+    Click    button >> text="Continue"
+    Fill Text    text="Password"    ${ADMIN_PASSWORD}
+    Click    button >> text="Log in"
+    Wait For Elements State    css=#main-content    visible    timeout=10s
 
 *** Test Cases ***
 Add module for ${SCENARIO} scenario
@@ -127,6 +137,24 @@ Passwort eines Kontos neu erzeugen
 Unbekanntes Konto wird abgelehnt
     ${output}    ${rc} =    Run action    reset-passwords    {"login":"niemand@example.org"}
     Should Not Be Equal As Integers    ${rc}    0
+
+Settings page loads the configuration
+    [Tags]    ui
+    Import Library    Browser
+    New Browser    chromium    headless=True
+    New Context    ignoreHTTPSErrors=True
+    Login to cluster-admin
+    Go To    https://${NODE_ADDR}/cluster-admin/#/apps/${module_id}?page=settings
+    Wait For Elements State    iframe >>> h2 >> text="Settings"    visible    timeout=20s
+    # Die Überschrift erscheint auch, wenn Modul-Aufgaben scheitern; das Adressfeld wird
+    # erst nach abgeschlossenem get-configuration aktiv und gefüllt
+    Wait For Elements State    iframe >>> input[placeholder="termine.example.org"]    enabled    timeout=30s
+    Get Property    iframe >>> input[placeholder="termine.example.org"]    value    ==    ${HOST}
+    Wait For Elements State    iframe >>> td >> text="admin1@${HOST}"    visible    timeout=10s
+    Wait For Elements State    iframe >>> td >> text="it10@${HOST}"    visible    timeout=10s
+    Sleep    2s
+    Take Screenshot    filename=${OUTPUT DIR}/browser/screenshot/settings.png    fullPage=True
+    Close Browser
 
 Remove module
     ${rc} =    Execute Command    remove-module --no-preserve ${module_id}

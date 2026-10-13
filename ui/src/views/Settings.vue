@@ -350,6 +350,34 @@ export default {
     next();
   },
   methods: {
+    // Start a module task and route its events to the given handlers
+    async runTask(action, data, handlers, extra) {
+      const eventId = this.getUuid();
+      this.core.$root.$once(`${action}-aborted-${eventId}`, handlers.aborted);
+      this.core.$root.$once(
+        `${action}-completed-${eventId}`,
+        handlers.completed
+      );
+      if (handlers.validationFailed) {
+        this.core.$root.$once(
+          `${action}-validation-failed-${eventId}`,
+          handlers.validationFailed
+        );
+      }
+      const res = await to(
+        this.createModuleTaskForApp(this.instanceName, {
+          action,
+          data,
+          extra: {
+            title: this.$t("action." + action),
+            isNotificationHidden: true,
+            ...extra,
+            eventId,
+          },
+        })
+      );
+      return res[0];
+    },
     focusElement(ref) {
       const element = this.$refs[ref];
       if (element && element.focus) {
