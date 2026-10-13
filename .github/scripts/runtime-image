@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Print the reference of the runtime image (pretix + laptopbuchung) built from runtime/.
+#
+# The tag is the Git tree hash of runtime/, so it changes with every change
+# in that directory and never otherwise. A published module image therefore
+# always points to the runtime it was tested with, and a tag is never reused
+# for different content.
+
+set -Eeuo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+repobase="${REPOBASE:-ghcr.io/platypuschan}"
+
+if [[ -n "$(git -C "${root}" status --porcelain -- runtime)" ]]; then
+    echo "runtime/ has uncommitted changes; commit them first so the tag matches the content." >&2
+    exit 1
+fi
+
+tree="$(git -C "${root}" rev-parse --short=12 HEAD:runtime)"
+printf '%s/termine2-runtime:%s\n' "${repobase,,}" "${tree}"

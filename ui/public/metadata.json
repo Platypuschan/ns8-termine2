@@ -1,0 +1,21 @@
+{
+  "name": "termine2",
+  "description": {
+    "en": "Appointment booking for the laptop rollout (pretix with personal invitation links, check-in and IT team accounts).",
+    "de": "Terminvergabe für den Laptop-Rollout (pretix mit persönlichen Einladungslinks, Check-in und Zugängen fürs IT-Team)."
+  },
+  "categories": [
+    "collaboration"
+  ],
+  "authors": [
+    {
+      "name": "Platypuschan"
+    }
+  ],
+  "docs": {
+    "documentation_url": "https://github.com/Platypuschan/ns8-termine2",
+    "bug_url": "https://github.com/Platypuschan/ns8-termine2/issues",
+    "code_url": "https://github.com/Platypuschan/ns8-termine2"
+  },
+  "source": "ghcr.io/platypuschan/termine2"
+}

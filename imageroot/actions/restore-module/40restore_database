@@ -1,0 +1,67 @@
+#!/bin/bash
+
+#
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -Eeuo pipefail
+exec 1>&2
+
+dump_file="termine.pg_dump"
+restore_dir="restore"
+restore_script="${restore_dir}/termine_restore.sh"
+
+if [[ ! -s "${dump_file}" ]]; then
+    echo "Missing or empty PostgreSQL dump of the Terminvergabe: ${dump_file}"
+    exit 1
+fi
+
+# Validate the custom-format archive before initializing the destination volume.
+podman run \
+    --rm \
+    --network=none \
+    --volume="${PWD}:/backup:Z,ro" \
+    "${POSTGRES_IMAGE}" \
+    pg_restore --list "/backup/${dump_file}" >/dev/null
+
+mkdir -p "${restore_dir}"
+chmod 0755 "${restore_dir}"
+rm -f "${restore_script}"
+cat >"${restore_script}" <<'RESTORE_SCRIPT'
+#!/bin/bash
+set -Eeuo pipefail
+
+restore_status=0
+pg_restore \
+    --exit-on-error \
+    --no-owner \
+    --no-privileges \
+    --username="$POSTGRES_USER" \
+    --dbname="$POSTGRES_DB" || restore_status=$?
+
+# The restore container is transient; stop the temporary postmaster and return
+# the exact pg_restore status to the NS8 restore action.
+docker_temp_server_stop
+exit "$restore_status"
+RESTORE_SCRIPT
+
+# The official image re-execs its entrypoint as postgres and sources
+# non-executable *.sh init files. Rootless bind-mount ownership maps this host
+# file to container root, so postgres needs traversal and read permissions.
+chmod 0644 "${restore_script}"
+
+podman run \
+    --rm \
+    --interactive \
+    --network=none \
+    --volume="./${restore_dir}:/docker-entrypoint-initdb.d:Z" \
+    --volume="postgres-data:/var/lib/postgresql/data:Z" \
+    --replace \
+    --name=restore-db \
+    --env-file=database.env \
+    --env TZ=UTC \
+    "${POSTGRES_IMAGE}" <"${dump_file}"
+
+rm -f "${restore_script}" "${dump_file}"
+rmdir "${restore_dir}" 2>/dev/null || true

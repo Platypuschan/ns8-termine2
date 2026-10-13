@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Veranstalter, Veranstaltung, Termine und Teams beim ersten Mal anlegen (danach unverändert), Konten abgleichen.
+# pretix' Standard-Zugang admin@localhost bekommt ein Zufallspasswort und wird danach deaktiviert.
+set -Eeuo pipefail
+termine-warten
+podman exec -e "ADMIN_PASSWORT=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')" \
+    pretix-app termine-entrypoint einrichten
+termine-konten-sync

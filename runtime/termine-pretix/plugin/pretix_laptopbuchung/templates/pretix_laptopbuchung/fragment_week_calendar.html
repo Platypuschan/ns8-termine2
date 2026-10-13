@@ -1,0 +1,52 @@
+{# Kopie von pretixpresale/fragment_week_calendar.html (pretix 2026.8.0): Status aus freien Plätzen #}
+{% load html_time %}
+{% load i18n %}
+{% load date_fast %}
+<div class="week-calendar"{% if any_events is False %} aria-hidden="true"{% endif %}>
+    {% for day in days %}
+        <details class="weekday {% if day.events %}has-events{% else %}no-events{% endif %} {% if day.today %}today{% endif %}"
+                data-date="{{ day.date|date_fast:"SHORT_DATE_FORMAT" }}" open>
+            <summary>
+                <h3><span class="fa fa-fw" aria-hidden="true"></span> <time datetime="{{ day.date|date_fast:"Y-m-d" }}">{{ day.day_formatted }}</time></h3>
+            </summary>
+            <ul class="events">
+                {% for event in day.events %}
+                    <li><a class="event {% if event.continued %}continued{% endif %} {% spaceless %}
+    {% if event.event.laptop_frei == 0 %}soldout{% elif event.event.laptop_frei == 1 %}available low{% else %}available{% endif %}
+{% endspaceless %}"
+                            href="{{ event.url }}{% if request.GET.einladung %}?einladung={{ request.GET.einladung|urlencode }}{% endif %}">
+                        {% if show_names|default_if_none:True %}
+                            <span class="event-name">
+                                {{ event.event.name }}
+                                {% if event.continued %} <i class="event-name-continued">{% trans "(continued)" %}</i>{% endif %}
+                            </span>
+                        {% endif %}
+                        {% if not event.continued %}
+                            {% if event.time %}
+                                <span class="event-time" data-time="{{ event.event.date_from.isoformat }}" data-timezone="{{ event.timezone }}" data-time-short>
+                                    <span class="fa fa-clock-o" aria-hidden="true"></span>
+                                    <time datetime="{{ event.time|date_fast:"H:i" }}">{{ event.time|date_fast:"TIME_FORMAT" }}</time>
+                                    {% if event.time_end %}
+                                        <span aria-hidden="true">–</span><span class="sr-only">{% trans "until" context "timerange" %}</span> <time datetime="{{ event.time_end|date_fast:"H:i" }}">{{ event.time_end|date_fast:"TIME_FORMAT" }}</time>
+                                    {% endif %}
+                                    {% if multiple_timezones %}
+                                        {{ event.timezone }}
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                            <span class="event-status">
+                                {% if event.event.laptop_frei == 0 %}
+                                    <span class="fa fa-ban" aria-hidden="true"></span> ausgebucht
+                                {% elif event.event.laptop_frei == 1 %}
+                                    <span class="fa fa-exclamation-circle" aria-hidden="true"></span> noch 1 Platz
+                                {% elif event.event.laptop_frei %}
+                                    <span class="fa fa-ticket" aria-hidden="true"></span> noch {{ event.event.laptop_frei }} Plätze
+                                {% endif %}
+                            </span>
+                        {% endif %}
+                    </a></li>
+                {% endfor %}
+            </ul>
+        </details>
+    {% endfor %}
+</div>

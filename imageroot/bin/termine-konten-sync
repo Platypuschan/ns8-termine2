@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Admins und IT-Mitarbeiter aus konten.json in pretix anlegen bzw. Passwörter setzen.
+set -Eeuo pipefail
+termine-warten
+podman exec -i pretix-app termine-entrypoint konten-sync <konten.json

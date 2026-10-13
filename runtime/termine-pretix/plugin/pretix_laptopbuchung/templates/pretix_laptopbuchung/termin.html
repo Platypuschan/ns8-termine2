@@ -1,0 +1,59 @@
+{% extends "pretixcontrol/event/base.html" %}
+{% block title %}Termin {{ slot.se.date_from|date:"d.m.Y H:i" }}{% endblock %}
+{% block content %}
+    <p><a href="{% url "plugins:pretix_laptopbuchung:termine" organizer=request.event.organizer.slug event=request.event.slug %}?tag={{ tag|date:"Y-m-d" }}">
+        <span class="fa fa-chevron-left"></span> alle Termine am {{ tag|date:"d.m.Y" }}</a></p>
+    <h1>Termin {{ slot.se.date_from|date:"l, d.m.Y" }}, {{ slot.se.date_from|date:"H:i" }}–{{ slot.se.date_to|date:"H:i" }} Uhr</h1>
+    <p>
+        {% if slot.ueberbucht %}<span class="label label-warning">überbucht</span>{% elif slot.frei == 0 %}<span class="label label-danger">voll</span>{% else %}<span class="label label-success">{{ slot.frei }} frei</span>{% endif %}
+        <span class="text-muted">{{ slot.belegt|length }} gebucht{% if slot.groesse %}, {{ slot.groesse }} Plätze für Selbstbucher{% endif %}</span>
+    </p>
+
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">Gebuchte Anwender</h3></div>
+        <table class="table table-condensed">
+            <thead><tr><th>Name</th><th>Inventarnr.</th><th>E-Mail</th><th>Buchung</th></tr></thead>
+            <tbody>
+            {% for b in slot.belegt %}
+                <tr>
+                    <td>{{ b.teilnehmer.name }}</td>
+                    <td>{{ b.teilnehmer.inventarnummer }}</td>
+                    <td>{{ b.teilnehmer.email }}</td>
+                    <td><a href="{% url "control:event.order" organizer=request.event.organizer.slug event=request.event.slug code=b.position.order.code %}">{{ b.position.order.code }}</a>
+                        {% if b.position.voucher.tag == "IT-Zuweisung" %}<span class="label label-default">zugewiesen</span>{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4" class="text-muted">Noch niemand gebucht.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if darf_schreiben %}
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">Anwender diesem Termin zuweisen</h3></div>
+        <div class="panel-body">
+            <form method="post" action="{% url "plugins:pretix_laptopbuchung:termin_zuweisen" organizer=request.event.organizer.slug event=request.event.slug subevent=slot.se.pk %}">
+                {% csrf_token %}
+                <div class="row">
+                    <div class="col-md-8 col-sm-7 col-xs-12">
+                        <select name="teilnehmer" class="form-control" required
+                                data-model-select2="generic"
+                                data-select2-url="{% url "plugins:pretix_laptopbuchung:anwender_suche" organizer=request.event.organizer.slug event=request.event.slug %}"
+                                data-placeholder="Anwender suchen (Name, E-Mail oder Inventarnummer) …"></select>
+                    </div>
+                    <div class="col-md-4 col-sm-5 col-xs-12">
+                        <button type="submit" class="btn btn-primary btn-block"
+                                data-confirm="Termin zuweisen? Der Anwender erhält sofort die Buchungsbestätigung mit Ticket.">
+                            <span class="fa fa-calendar-check-o"></span> Termin zuweisen
+                        </button>
+                    </div>
+                </div>
+                <p class="help-block">Die Zuweisung ist auch möglich, wenn der Termin voll ist (Überbuchung). Sie zählt zur Belegung;
+                Selbstbucher sehen den Termin dann als „ausgebucht“. Der Anwender erhält die Bestätigung mit Ticket-QR, PDF-Ticket und
+                Kalendereintrag. Die Suche zeigt nur Anwender ohne aktiven Termin.</p>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+{% endblock %}

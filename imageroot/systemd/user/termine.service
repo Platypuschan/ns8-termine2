@@ -1,0 +1,32 @@
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Pod der Terminvergabe: PostgreSQL, Redis, pretix (Web + Hintergrundaufgaben) und Cron.
+# Nur pretix ist erreichbar – über Traefik an 127.0.0.1:${TCP_PORT}.
+
+[Unit]
+Description=Terminvergabe Pod
+Requires=postgresql-app.service redis-app.service pretix-app.service cron-app.service
+Before=postgresql-app.service redis-app.service pretix-app.service cron-app.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=-%E/state/environment
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/termine.pid %t/termine.pod-id
+ExecStartPre=/usr/bin/podman pod create --infra-conmon-pidfile %t/termine.pid \
+    --pod-id-file %t/termine.pod-id \
+    --name termine \
+    --network=slirp4netns:allow_host_loopback=true \
+    --publish 127.0.0.1:${TCP_PORT}:80 \
+    --replace
+ExecStart=/usr/bin/podman pod start --pod-id-file %t/termine.pod-id
+ExecStop=/usr/bin/podman pod stop --ignore --pod-id-file %t/termine.pod-id -t 10
+ExecStopPost=/usr/bin/podman pod rm --ignore -f --pod-id-file %t/termine.pod-id
+PIDFile=%t/termine.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

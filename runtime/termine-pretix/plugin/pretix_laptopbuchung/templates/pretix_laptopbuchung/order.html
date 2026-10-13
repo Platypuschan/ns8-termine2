@@ -1,0 +1,80 @@
+{# Bestellbestätigung für laptopbuchung – Layout und Texte werden später angepasst #}
+{% extends "pretixpresale/event/base.html" %}
+{% load i18n %}
+{% load eventsignal %}
+{% load laptopbuchung %}
+{% block title %}{% if "thanks" in request.GET %}Termin gebucht{% else %}Ihre Buchung{% endif %}{% endblock %}
+{% block content %}
+    {% if "thanks" in request.GET %}
+        <div class="thank-you">
+            <span class="fa fa-check-circle" aria-hidden="true"></span>
+            <h2 class="h1">Vielen Dank!</h2>
+            <p>Ihr Termin ist gebucht. Eine Bestätigung wurde an {{ order.email }} gesendet.</p>
+        </div>
+    {% endif %}
+    {% if "bereits" in request.GET %}
+        <div class="alert alert-info"><p>Sie haben bereits einen Termin gebucht. Hier sind die Details Ihrer Buchung.</p></div>
+    {% endif %}
+
+    <h2 class="h1">Buchung {{ order.code }}</h2>
+    <dl class="lead order-details">
+        <dt class="sr-only">Status</dt>
+        <dd class="text-muted">{% include "pretixpresale/event/fragment_order_status.html" with order=order event=request.event %}</dd>
+    </dl>
+
+    {% for pos in order.positions.all %}
+        {% with tn=pos.laptop_buchung.teilnehmer %}
+        <div class="panel panel-default cart">
+            <div class="panel-heading">
+                <h3 class="panel-title">Bestellte Produkte</h3>
+            </div>
+            <div class="panel-body">
+                <dl class="dl-horizontal">
+                    <dt>Termin</dt>
+                    <dd><strong>{{ pos.item.name }}</strong></dd>
+                    {% if pos.subevent %}
+                        <dt>Datum</dt>
+                        <dd>{{ pos.subevent.date_from|date:"l, d. F Y" }}, {{ pos.subevent.date_from|date:"H:i" }}–{{ pos.subevent.date_to|date:"H:i" }} Uhr</dd>
+                        {% if pos.subevent.location %}
+                            <dt>Ort</dt>
+                            <dd>{{ pos.subevent.location }}</dd>
+                        {% endif %}
+                    {% endif %}
+                </dl>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">Ihre Informationen</h3>
+            </div>
+            <div class="panel-body">
+                <dl class="dl-horizontal">
+                    <dt>E-Mail</dt>
+                    <dd>{% if tn %}{{ tn.email }}{% else %}{{ order.email }}{% endif %}</dd>
+                    <dt>Name</dt>
+                    <dd>{% if tn %}{{ tn.name }}{% else %}{{ pos.attendee_name }}{% endif %}</dd>
+                    <dt>Inventarnummer</dt>
+                    <dd>{% if tn %}{{ tn.inventarnummer }}{% else %}{% for a in pos.answers.all %}{% if a.question.identifier == "INVENTARNUMMER" %}{{ a.answer }}{% endif %}{% endfor %}{% endif %}</dd>
+                </dl>
+            </div>
+        </div>
+        {% if order.status == "p" and not pos.canceled %}
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">Ihr Ticket-Code</h3>
+            </div>
+            <div class="panel-body">
+                <div class="row">
+                    <div class="col-sm-3 col-xs-6 laptop-qr">{{ pos.secret|qr_svg }}</div>
+                    <div class="col-sm-9 col-xs-12">
+                        <p>Bitte zeigen Sie diesen Code bei der Abgabe und bei der Abholung Ihres Laptops vor
+                        (auf dem Smartphone oder ausgedruckt). Er ist auch als PDF an Ihre Bestätigungs-E-Mail angehängt.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+    {% endfor %}
+{% endblock %}

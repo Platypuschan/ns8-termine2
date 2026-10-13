@@ -1,0 +1,16 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Wartet, bis pretix im Container pretix-app antwortet (Migrationen beim ersten Start dauern).
+set -Eeuo pipefail
+for _ in $(seq 1 120); do
+    if podman exec pretix-app python3 -c "import urllib.request; urllib.request.urlopen('http://localhost/healthcheck/', timeout=5)" >/dev/null 2>&1; then
+        exit 0
+    fi
+    sleep 5
+done
+echo "termine: pretix antwortet nicht" >&2
+exit 1

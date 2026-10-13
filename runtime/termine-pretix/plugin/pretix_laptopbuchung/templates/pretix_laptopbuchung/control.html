@@ -1,0 +1,132 @@
+{% extends "pretixcontrol/event/base.html" %}
+{% block title %}Laptop-Anwender{% endblock %}
+{% block content %}
+    <h1>Laptop-Anwender</h1>
+
+    <p>
+        {% for key, label, cls, n in summen %}
+            <a href="?status={{ key }}" class="label label-{{ cls }} laptop-kennzahl">{{ label }}: {{ n }}</a>
+        {% endfor %}
+        <span class="text-muted">– gesamt {{ gesamt }} Anwender</span>
+    </p>
+
+    <p class="text-muted">
+        <span class="fa fa-qrcode"></span> Scannen statt Klicken: im Menü auf „Check-in“ klicken (öffnet den Scanner in einem
+        eigenen Fenster), Liste „Laptop-Abgabe“ wählen und den Ticket-Code des Anwenders scannen –
+        <strong>Annahme</strong> = Laptop abgegeben, <strong>Ausgabe</strong> = Laptop ausgegeben („Richtung wechseln“).
+    </p>
+
+    {% if darf_schreiben %}
+    <div class="row">
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><h3 class="panel-title">Einladungen verschicken</h3></div>
+                <div class="panel-body laptop-hinweis"><p class="help-block">Importierte Anwender werden erst angeschrieben, wenn Sie hier einladen. Mit „Anzahl“ nur die nächsten N noch nicht angeschriebenen der Welle einladen (gestaffelt).</p></div>
+                <div class="panel-body">
+                    {% for welle, offen in offen_je_welle %}
+                        <form method="post" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="form-inline laptop-welle">
+                            {% csrf_token %}
+                            <input type="hidden" name="aktion" value="einladen_welle">
+                            <input type="hidden" name="welle" value="{{ welle }}">
+                            <strong>{{ welle|default:"(ohne Welle)" }}</strong>: {{ offen }} noch nicht angeschrieben
+                            {% if offen %}
+                                <input type="number" name="anzahl" min="1" max="{{ offen }}" class="form-control input-sm laptop-anzahl"
+                                       placeholder="alle" title="Anzahl (leer = alle)">
+                                <button type="submit" class="btn btn-primary btn-sm"
+                                        data-confirm="Einladungen für {{ welle }} jetzt senden?">
+                                    <span class="fa fa-envelope"></span> einladen
+                                </button>
+                            {% endif %}
+                        </form>
+                    {% empty %}
+                        <p class="text-muted">Noch keine Anwender importiert.</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="panel panel-default">
+                <div class="panel-heading"><h3 class="panel-title">Anwender importieren (CSV: name;email;inventarnummer)</h3></div>
+                <div class="panel-body">
+                    <form method="post" enctype="multipart/form-data" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="form-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="aktion" value="import">
+                        <input type="text" name="welle" class="form-control" placeholder="Welle, z. B. Welle 2" required>
+                        <input type="file" name="datei" accept=".csv,text/csv" required class="laptop-datei">
+                        <button type="submit" class="btn btn-default"><span class="fa fa-upload"></span> importieren</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="get" class="form-inline laptop-filter">
+        <select name="welle" class="form-control">
+            <option value="">alle Wellen</option>
+            {% for w in wellen %}<option value="{{ w }}" {% if request.GET.welle == w %}selected{% endif %}>{{ w }}</option>{% endfor %}
+        </select>
+        <select name="status" class="form-control">
+            <option value="">alle Status</option>
+            {% for k, label in status_choices %}<option value="{{ k }}" {% if request.GET.status == k %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <input type="text" name="q" class="form-control" placeholder="Name, E-Mail, Inventarnr." value="{{ request.GET.q }}">
+        <button type="submit" class="btn btn-default"><span class="fa fa-filter"></span> filtern</button>
+        <a class="btn btn-default" href="{% url "plugins:pretix_laptopbuchung:export" organizer=request.event.organizer.slug event=request.event.slug %}?{{ request.GET.urlencode }}">
+            <span class="fa fa-download"></span> CSV-Export
+        </a>
+    </form>
+
+    <form method="post" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}">
+        {% csrf_token %}
+        <input type="hidden" name="zurueck" value="{{ request.GET.urlencode }}">
+        <div class="table-responsive">
+        <table class="table table-condensed table-hover">
+            <thead>
+            <tr>
+                {% if darf_schreiben %}<th></th>{% endif %}
+                <th>Name</th><th>E-Mail</th><th>Inventarnr.</th><th>Welle</th>
+                <th>Angeschrieben</th><th>Status</th><th>Termin</th><th>Abgabe</th><th>Ausgabe</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for r in rows %}
+                <tr>
+                    {% if darf_schreiben %}<td><input type="checkbox" name="auswahl" value="{{ r.tn.pk }}"></td>{% endif %}
+                    <td>{{ r.tn.name }}</td>
+                    <td>{{ r.tn.email }}</td>
+                    <td>{{ r.tn.inventarnummer }}</td>
+                    <td>{{ r.tn.welle }}</td>
+                    <td>{% if r.tn.eingeladen_am %}{{ r.tn.eingeladen_am|date:"d.m.Y H:i" }}{% if r.tn.einladungen > 1 %} <span class="text-muted">({{ r.tn.einladungen }}×)</span>{% endif %}{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td><span class="label label-{{ r.status_class }}">{{ r.status_label }}</span></td>
+                    <td>{% if r.termin %}{{ r.termin.subevent.date_from|date:"d.m.Y H:i" }}
+                        <a href="{% url "control:event.order" organizer=request.event.organizer.slug event=request.event.slug code=r.termin.order.code %}">{{ r.termin.order.code }}</a>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td>{% if r.abgegeben_am %}{{ r.abgegeben_am|date:"d.m.Y H:i" }}
+                            {% if darf_schreiben %}<button type="submit" name="aktion" value="abgabe_zurueck:{{ r.tn.pk }}" class="btn btn-link btn-xs"
+                                data-confirm="Abgabe von {{ r.tn.name }} zurücknehmen?">rückgängig</button>{% endif %}
+                        {% elif r.termin and darf_schreiben %}
+                            <button type="submit" name="aktion" value="abgegeben:{{ r.tn.pk }}" class="btn btn-warning btn-xs">
+                                <span class="fa fa-sign-in"></span> Laptop abgegeben</button>
+                        {% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td>{% if r.ausgegeben_am %}{{ r.ausgegeben_am|date:"d.m.Y H:i" }}
+                            {% if darf_schreiben %}<button type="submit" name="aktion" value="ausgabe_zurueck:{{ r.tn.pk }}" class="btn btn-link btn-xs"
+                                data-confirm="Ausgabe an {{ r.tn.name }} zurücknehmen?">rückgängig</button>{% endif %}
+                        {% elif r.abgegeben_am and darf_schreiben %}
+                            <button type="submit" name="aktion" value="ausgegeben:{{ r.tn.pk }}" class="btn btn-success btn-xs">
+                                <span class="fa fa-sign-out"></span> Laptop ausgegeben</button>
+                        {% else %}<span class="text-muted">–</span>{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="10" class="text-muted">Keine Anwender gefunden.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% if darf_schreiben and rows %}
+            <button type="submit" name="aktion" value="einladen_auswahl" class="btn btn-default"
+                    data-confirm="Einladung an die ausgewählten Anwender (erneut) senden?">
+                <span class="fa fa-envelope"></span> Auswahl (erneut) einladen
+            </button>
+        {% endif %}
+    </form>
+{% endblock %}

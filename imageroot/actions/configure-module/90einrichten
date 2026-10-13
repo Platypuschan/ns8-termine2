@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Veranstaltung beim ersten Mal anlegen (ändert danach nichts mehr) und Konten abgleichen.
+set -Eeuo pipefail
+exec 1>&2
+
+termine-einrichten

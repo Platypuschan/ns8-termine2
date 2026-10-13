@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Konsistente PostgreSQL-Sicherung für das NS8-Backup.
+set -Eeuo pipefail
+umask 077
+
+dump_file="termine.pg_dump"
+temporary_dump="${dump_file}.tmp"
+trap 'rm -f "${temporary_dump}"' EXIT
+
+echo "Erzeuge PostgreSQL-Sicherung der Terminvergabe" >&2
+podman exec postgresql-app sh -ceu \
+    'exec pg_dump --format=custom --no-owner --no-privileges --lock-wait-timeout=30s --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
+    >"${temporary_dump}"
+if [[ ! -s "${temporary_dump}" ]]; then
+    echo "Die PostgreSQL-Sicherung ist leer – Backup abgebrochen." >&2
+    exit 1
+fi
+mv -f "${temporary_dump}" "${dump_file}"
+trap - EXIT

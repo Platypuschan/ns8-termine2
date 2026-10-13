@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+set -Eeuo pipefail
+exec 1>&2
+
+systemctl --user daemon-reload
+systemctl --user enable termine.service
+# Einstellungen (Adresse, Mailserver) liest pretix nur beim Start
+systemctl --user restart termine.service

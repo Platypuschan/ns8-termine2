@@ -1,0 +1,35 @@
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Terminvergabe PostgreSQL
+BindsTo=termine.service
+After=termine.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%E/state/environment
+EnvironmentFile=%E/state/database.env
+WorkingDirectory=%E/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/postgresql-app.pid %t/postgresql-app.ctr-id
+ExecStartPre=/bin/mkdir -p %E/state/restore
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/postgresql-app.pid \
+    --cidfile %t/postgresql-app.ctr-id --cgroups=no-conmon \
+    --pod-id-file %t/termine.pod-id --replace -d --name postgresql-app \
+    --env-file=%E/state/database.env \
+    --volume postgres-data:/var/lib/postgresql/data:Z \
+    --volume %E/state/restore:/docker-entrypoint-initdb.d:Z \
+    --env TZ=UTC \
+    ${POSTGRES_IMAGE}
+ExecStartPost=/usr/bin/timeout 90 /usr/bin/bash -c 'until podman exec postgresql-app pg_isready --username="${POSTGRES_USER}" --dbname="${POSTGRES_DB}"; do sleep 2; done'
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/postgresql-app.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/postgresql-app.ctr-id
+SyslogIdentifier=%u
+PIDFile=%t/postgresql-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

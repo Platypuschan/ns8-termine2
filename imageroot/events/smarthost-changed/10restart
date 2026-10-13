@@ -1,0 +1,12 @@
+#!/bin/bash
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Neue Smarthost-Einstellungen übernehmen (nur im Modus „Smarthost“).
+set -Eeuo pipefail
+if grep -q '"mail_mode": "external"' termine.json 2>/dev/null; then
+    exit 0
+fi
+systemctl --user try-restart pretix-app.service

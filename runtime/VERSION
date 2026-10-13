@@ -1,0 +1,3 @@
+# Stand der Bestandteile dieses Images (scripts/uebernehmen.sh aktualisiert TERMINE_PRETIX_COMMIT)
+TERMINE_PRETIX_COMMIT=cafaebb10278efb032d269f33c45dcd727fa0dca
+PRETIX_IMAGE=docker.io/pretix/standalone:2026.8.0
