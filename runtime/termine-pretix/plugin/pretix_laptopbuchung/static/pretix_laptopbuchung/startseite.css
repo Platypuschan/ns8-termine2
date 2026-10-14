@@ -1,0 +1,16 @@
+/* Startseite (Basis-URL): Hintergrund und Hinweisblock in den Farben der Uniklinik */
+body { background: var(--laptop-hellblau, #eef5fc) !important; }
+.form-signin.startseite {
+    border-top: 4px solid var(--laptop-dunkelblau, #0f2d64);
+    color: #1d2b3a;
+    padding-bottom: 24px;
+}
+.form-signin.startseite p { margin-bottom: 1em; }
+.form-signin.startseite .startseite-login {
+    margin-top: 2.5em;
+    margin-bottom: 0;
+}
+.form-signin.startseite .startseite-login a {
+    color: var(--laptop-dunkelblau, #0f2d64);
+    font-weight: bold;
+}

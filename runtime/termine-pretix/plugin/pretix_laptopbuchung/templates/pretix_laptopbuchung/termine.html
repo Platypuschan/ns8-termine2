@@ -1,0 +1,63 @@
+{% extends "pretixcontrol/event/base.html" %}
+{% block title %}Termine{% endblock %}
+{% block content %}
+    <h1>Termine</h1>
+    <form method="get" class="form-inline laptop-filter">
+        <input type="hidden" name="tag" value="{{ tag|date:"Y-m-d" }}">
+        <div class="input-group laptop-suche">
+            <input type="search" name="suche" value="{{ suche }}" class="form-control" autofocus
+                   placeholder="Anwender suchen (Name, E-Mail oder Inventarnummer)">
+            <span class="input-group-btn"><button type="submit" class="btn btn-default"><span class="fa fa-search"></span> suchen</button></span>
+        </div>
+        {% if suche %}<a href="?tag={{ tag|date:"Y-m-d" }}" class="btn btn-link">Suche zurücksetzen</a>{% endif %}
+    </form>
+
+    {% if suche %}
+    <div class="panel panel-default">
+        <div class="panel-heading"><h3 class="panel-title">Suchergebnis für „{{ suche }}“</h3></div>
+        <table class="table table-condensed table-hover">
+            <thead><tr><th>Name</th><th>Inventarnr.</th><th>E-Mail</th><th>Status</th><th>Termin</th></tr></thead>
+            <tbody>
+            {% for r in treffer %}
+                {% if r.termin %}{% url "plugins:pretix_laptopbuchung:termin" organizer=request.event.organizer.slug event=request.event.slug subevent=r.termin.subevent.pk as termin_url %}{% endif %}
+                <tr{% if r.termin %} data-href="{{ termin_url }}"{% endif %}>
+                    <td>{{ r.tn.name }}</td>
+                    <td>{{ r.tn.inventarnummer }}</td>
+                    <td>{{ r.tn.email }}</td>
+                    <td><span class="label label-{{ r.status_class }}">{{ r.status_label }}</span></td>
+                    <td>{% if r.termin %}<a href="{{ termin_url }}">{{ r.termin.subevent.date_from|date:"D d.m.Y, H:i" }}–{{ r.termin.subevent.date_to|date:"H:i" }} Uhr</a>
+                        {% else %}<span class="text-muted">kein Termin</span>{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="5" class="text-muted">Kein Anwender gefunden.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <p>
+        {% for t in tage %}
+            <a href="?tag={{ t|date:"Y-m-d" }}" class="btn btn-sm laptop-tag {% if t == tag %}btn-primary{% else %}btn-default{% endif %}">{{ t|date:"D d.m." }}</a>
+        {% empty %}<span class="text-muted">Keine Termine angelegt.</span>{% endfor %}
+    </p>
+    <h3>{{ tag|date:"l, d.m.Y" }}</h3>
+    <p class="text-muted">Termin anklicken, um ihn zu öffnen und einem Anwender zuzuweisen.</p>
+    <table class="table table-condensed table-hover">
+        <thead><tr><th>Zeit</th><th>Belegung</th><th>Anwender</th><th></th></tr></thead>
+        <tbody>
+        {% for s in slots %}
+            {% url "plugins:pretix_laptopbuchung:termin" organizer=request.event.organizer.slug event=request.event.slug subevent=s.se.pk as termin_url %}
+            <tr data-href="{{ termin_url }}">
+                <td><a href="{{ termin_url }}"><strong>{{ s.se.date_from|date:"H:i" }}–{{ s.se.date_to|date:"H:i" }}</strong></a></td>
+                <td>{% if s.ueberbucht %}<span class="label label-warning">überbucht</span>{% elif s.frei == 0 %}<span class="label label-danger">voll</span>{% else %}<span class="label label-success">{{ s.frei }} frei</span>{% endif %}
+                    <span class="text-muted">({{ s.belegt|length }}{% if s.groesse %}/{{ s.groesse }}{% endif %})</span></td>
+                <td>{% for b in s.belegt %}<div>{{ b.teilnehmer.name }} <span class="text-muted">({{ b.teilnehmer.inventarnummer }})</span></div>{% empty %}<span class="text-muted">–</span>{% endfor %}</td>
+                <td class="text-right"><a href="{{ termin_url }}" class="btn btn-default btn-xs">öffnen <span class="fa fa-chevron-right"></span></a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="4" class="text-muted">An diesem Tag gibt es keine Termine.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

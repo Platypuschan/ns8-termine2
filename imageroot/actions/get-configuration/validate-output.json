@@ -1,0 +1,45 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Einstellungen der Terminvergabe",
+    "$id": "http://nethserver.org/json-schema/task/output/termine/get-configuration",
+    "description": "Adresse, Mailversand und die Konten der Admins und IT-Mitarbeiter",
+    "type": "object",
+    "required": ["host", "http2https", "lets_encrypt", "mail_mode", "smtp", "admins", "mitarbeiter"],
+    "definitions": {
+        "konten": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["login", "name", "passwort"],
+                "properties": {
+                    "login": {"type": "string"},
+                    "name": {"type": "string"},
+                    "passwort": {"type": "string"}
+                }
+            }
+        }
+    },
+    "properties": {
+        "host": {"type": "string"},
+        "http2https": {"type": "boolean"},
+        "lets_encrypt": {"type": "boolean"},
+        "mail_mode": {"type": "string", "enum": ["smarthost", "external"]},
+        "mail_from": {"type": "string"},
+        "smtp": {
+            "type": "object",
+            "properties": {
+                "host": {"type": "string"},
+                "port": {"type": "integer"},
+                "username": {"type": "string"},
+                "encryption": {"type": "string"},
+                "password_set": {"type": "boolean"}
+            }
+        },
+        "smarthost_available": {"type": "boolean"},
+        "smarthost_host": {"type": "string"},
+        "admins": {"$ref": "#/definitions/konten"},
+        "mitarbeiter": {"$ref": "#/definitions/konten"},
+        "shop_url": {"type": "string"},
+        "control_url": {"type": "string"}
+    }
+}

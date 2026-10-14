@@ -1,0 +1,29 @@
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+[Unit]
+Description=Terminvergabe Redis
+BindsTo=termine.service
+After=termine.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%E/state/environment
+WorkingDirectory=%E/state
+Restart=always
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/redis-app.pid %t/redis-app.ctr-id
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/redis-app.pid \
+    --cidfile %t/redis-app.ctr-id --cgroups=no-conmon \
+    --pod-id-file %t/termine.pod-id --replace -d --name redis-app \
+    --volume redis-data:/data:Z \
+    ${REDIS_IMAGE} redis-server --appendonly yes --bind 127.0.0.1
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/redis-app.ctr-id -t 10
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/redis-app.ctr-id
+SyslogIdentifier=%u
+PIDFile=%t/redis-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

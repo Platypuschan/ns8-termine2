@@ -1,0 +1,8 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Passwörter neu erzeugen – Ergebnis",
+    "$id": "http://nethserver.org/json-schema/task/output/termine/reset-passwords",
+    "type": "object",
+    "required": ["geaendert"],
+    "properties": {"geaendert": {"type": "array", "items": {"type": "string"}}}
+}

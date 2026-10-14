@@ -1,0 +1,4 @@
+/* Seiten-Footer auf allen pretix-Webseiten ausblenden (auch bei Druckausgabe). */
+footer {
+    display: none !important;
+}

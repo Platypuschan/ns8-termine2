@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pretix-laptopbuchung"
+version = "0.1.0"
+description = "Direktbuchung von Laptop-Abgabeterminen per persönlichem Code"
+requires-python = ">=3.11"
+
+[project.entry-points."pretix.plugin"]
+pretix_laptopbuchung = "pretix_laptopbuchung:PretixPluginMeta"
+
+[tool.setuptools.packages.find]
+include = ["pretix_laptopbuchung*"]
+
+[tool.setuptools.package-data]
+pretix_laptopbuchung = ["templates/pretix_laptopbuchung/*.html", "templates/pretix_laptopbuchung/order/*.html", "static/pretix_laptopbuchung/*", "static/pretix_laptopbuchung/branding/*"]

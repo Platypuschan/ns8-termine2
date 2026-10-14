@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# Schreibt mail.env für pretix: NS8-Smarthost oder externer SMTP-Server laut Einstellungen.
+# Läuft vor jedem Start von pretix-app (Smarthost-Einstellungen können sich ändern).
+
+import os
+import sys
+
+import agent
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
+import termine_setup
+
+settings = termine_setup.read_settings()
+smarthost = None
+if settings["mail_mode"] == "smarthost":
+    try:
+        # Replikat: Start auch ohne erreichbaren Cluster-Leader möglich
+        smarthost = agent.get_smarthost_settings(agent.redis_connect(use_replica=True))
+    except Exception as error:
+        print(f"termine: NS8-Smarthost nicht lesbar, Mailversand nicht möglich: {error}", file=sys.stderr)
+    if not (smarthost and smarthost.get("enabled") and smarthost.get("host")):
+        print("termine: Kein NS8-Smarthost eingerichtet – pretix kann keine E-Mails versenden.", file=sys.stderr)
+termine_setup.write_mail_env(settings, smarthost, os.environ.get("TRAEFIK_HOST", ""))

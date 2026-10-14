@@ -1,0 +1,10 @@
+{% extends "pretixcontrol/event/base.html" %}
+{% block title %}Bestellverlauf {{ order.code }}{% endblock %}
+{% block content %}
+    <p><a href="{% url "control:event.order" organizer=request.event.organizer.slug event=request.event.slug code=order.code %}">
+        <span class="fa fa-chevron-left"></span> zurück zur Terminbuchung {{ order.code }}</a></p>
+    <h1>Bestellverlauf: {{ order.code }}</h1>
+    <div class="panel panel-default">
+        {% include "pretixcontrol/includes/logs.html" with obj=order %}
+    </div>
+{% endblock %}

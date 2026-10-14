@@ -1,0 +1,12 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Passwörter neu erzeugen",
+    "$id": "http://nethserver.org/json-schema/task/input/termine/reset-passwords",
+    "description": "Erzeugt ein neues Passwort für ein Konto oder – ohne login – für alle Admins und IT-Mitarbeiter",
+    "examples": [{"login": "it01@termine.example.org"}, {}],
+    "type": "object",
+    "properties": {
+        "login": {"type": "string", "maxLength": 254, "description": "Login des Kontos; leer oder fehlend = alle Konten"}
+    },
+    "additionalProperties": false
+}

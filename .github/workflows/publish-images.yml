@@ -1,0 +1,123 @@
+name: "Publish images"
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  actions: read
+  contents: write
+  security-events: write
+
+concurrency:
+  group: publish-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  runtime:
+    name: "termine2 runtime image"
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build and push the runtime image once per runtime/ content
+        shell: bash
+        env:
+          REPOBASE: ghcr.io/${{ github.repository_owner }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          image="$(.github/scripts/runtime-image)"
+          if skopeo inspect --raw "docker://${image}" >/dev/null 2>&1; then
+            echo "::notice::${image} already exists; runtime/ is unchanged."
+            exit 0
+          fi
+          # Tags are never overwritten: a new runtime/ content gets a new tag.
+          buildah bud -t "${image}" runtime
+          printf '%s' "$REGISTRY_TOKEN" | buildah login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          buildah push "${image}" "docker://${image}"
+          echo "Published ${image}" >> "$GITHUB_STEP_SUMMARY"
+
+  # Eigener Job statt NethServer/ns8-github-actions publish-branch.yml: dessen
+  # "permissions: packages: write" entzieht contents:read, und der Checkout eines
+  # privaten Repositorys scheitert dann mit "Repository not found".
+  publish-images:
+    name: Publish module images
+    needs: runtime
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: publish-images-${{ github.ref_name }}
+      cancel-in-progress: true
+    env:
+      REPOBASE: ghcr.io/${{ github.repository_owner }}
+      IMAGETAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: ui/node_modules
+          key: "yarn-${{ hashFiles('ui/yarn.lock') }}"
+      - id: build
+        run: |
+          REPOBASE=${REPOBASE,,}
+          IMAGETAG=$(printf '%s' "${IMAGETAG:?}" | tr '/' '-')
+          export REPOBASE IMAGETAG
+          echo "IMAGETAG=${IMAGETAG}" >> "$GITHUB_ENV"
+          bash build-images.sh
+      - name: Push module images
+        env:
+          IMAGES: ${{ steps.build.outputs.images }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          trap 'buildah logout ghcr.io' EXIT
+          printf '%s' "$REGISTRY_TOKEN" | buildah login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          read -ra images <<<"${IMAGES}"
+          for image in "${images[@]}"; do
+            buildah push "${image}" "docker://${image}:${IMAGETAG}"
+            if [[ "${IMAGETAG}" == "main" || "${IMAGETAG}" == "master" ]]; then
+              buildah push "${image}" "docker://${image}:latest"
+            fi
+            echo "Published ${image}:${IMAGETAG}" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+  module:
+    needs: publish-images
+    uses: NethServer/ns8-github-actions/.github/workflows/module-info.yml@v1
+
+  qemu:
+    # Static: a skipped job shows its name with the matrix expressions
+    # unexpanded. The called job adds "<scenario> <distro>".
+    name: NS8
+    needs: module
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [rocky9, debian13]
+        scenario: [install, update]
+    # statuses: write lets each leg report continuous-integration/qemu/<distro>-<scenario>.
+    permissions:
+      contents: read
+      statuses: write
+    uses: NethServer/ns8-github-actions/.github/workflows/test-on-qemu.yml@v1
+    with:
+      distro: ${{ matrix.distro }}
+      image_url: ${{ needs.module.outputs.image }}
+      repo_ref: ${{ needs.module.outputs.sha }}
+      version_tag: ${{ needs.module.outputs.tag }}
+      artifact_suffix: ${{ matrix.scenario }}
+      status_suffix: ${{ matrix.scenario }}
+      script: test-module-${{ matrix.scenario }}.sh
+      timeout_minutes: 60
+
+  trivy:
+    needs: module
+    if: ${{ needs.module.outputs.release == 'stable' || needs.module.outputs.release == 'latest' || github.event_name == 'workflow_dispatch' }}
+    uses: NethServer/ns8-github-actions/.github/workflows/scan-with-trivy.yml@v1
+    with:
+      images: ${{ needs.module.outputs.images }}

@@ -1,0 +1,29 @@
+# Terminvergabe (pretix + Plugin pretix_laptopbuchung aus termine-pretix) – Laufzeit-Image des NS8-Moduls
+ARG PRETIX_IMAGE=docker.io/pretix/standalone:2026.8.0
+FROM ${PRETIX_IMAGE}
+
+ARG TERMINE_PRETIX_COMMIT=unbekannt
+LABEL org.opencontainers.image.title="termine-pretix" \
+      org.opencontainers.image.description="UK-IT Services Terminvergabe: pretix mit Plugin pretix_laptopbuchung" \
+      de.uk-it.termine-pretix.commit="${TERMINE_PRETIX_COMMIT}"
+
+USER root
+COPY termine-pretix/plugin /tmp/plugin
+# Fehlen die Logo-Dateien, Platzhalter anlegen (collectstatic muss die url()-Verweise in branding.css auflösen können)
+RUN B=/tmp/plugin/pretix_laptopbuchung/static/pretix_laptopbuchung/branding && mkdir -p $B && \
+    for f in logo.svg logo-weiss.svg; do [ -s $B/$f ] || echo '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>' > $B/$f; done && \
+    pip install --no-cache-dir --no-deps --no-build-isolation --root-user-action=ignore /tmp/plugin && rm -rf /tmp/plugin
+# Vorlagen-Weichen (werden beim Start nach /data/templates kopiert), Einrichtung, Beispiel-Anwenderlisten
+# Favicon und App-Icons der Uniklinik (von uk-koeln.de) ersetzen die pretix-Icons gleichen Namens
+COPY termine-pretix/static-ueberschreiben/ /pretix/src/pretix/static/
+COPY termine-pretix/templates /opt/termine/templates
+COPY termine-pretix/setup_demo.py termine-pretix/anwender-welle1.csv termine-pretix/anwender-welle2.csv /opt/termine/
+COPY docker/konten.py /opt/termine/
+COPY docker/entrypoint.sh /usr/local/bin/termine-entrypoint
+RUN chmod 755 /usr/local/bin/termine-entrypoint && chown -R pretixuser:pretixuser /opt/termine
+
+USER pretixuser
+RUN cd /pretix/src && python3 -m pretix collectstatic --noinput
+
+ENTRYPOINT ["termine-entrypoint"]
+CMD ["all"]

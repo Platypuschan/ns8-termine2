@@ -1,0 +1,248 @@
+{# Kopie von pretixpresale/event/index.html (pretix 2026.8.0), angepasst für laptopbuchung #}
+{% extends "pretixpresale/event/base.html" %}
+{% load i18n %}
+{% load l10n %}
+{% load static %}
+{% load eventurl %}
+{% load cache_large %}
+{% load money %}
+{% load thumb %}
+{% load eventsignal %}
+{% load laptopbuchung %}
+{% load rich_text %}
+{% load icon %}
+{% load dialog %}
+
+{% block title %}
+    {% if "year" in request.GET %}
+        {% if list_type == "calendar" %}
+            {% blocktrans with datetime=date|date:"F Y" %}
+                Calendar for {{ datetime }}
+            {% endblocktrans %} ::
+        {% elif list_type == "week" %}
+            {% blocktrans with datetime=date|date:week_format %}
+                Calendar for {{ datetime }}
+            {% endblocktrans %} ::
+        {% endif %}
+    {% elif subevent %}
+        {% if subevent.name|upper != event.name|upper %}
+            {# The |upper is a trick to force LazyI18nString→str conversion before comparison #}
+            {{ subevent.name }} ::
+        {% endif %}
+        {{ subevent.get_date_range_display_with_times }} ::
+    {% endif %}
+{% endblock %}
+
+{% block custom_header %}
+    {{ block.super }}
+    <meta property="og:title" content="{{ ev.name }}" />
+    {% if request.event.has_subevents and not subevent %}
+        <meta property="og:description" content="{% trans "Event series" %}" />
+    {% else %}
+        <meta property="og:description" content="{{ ev.get_date_range_display }}" />
+    {% endif %}
+    {% if subevent %}
+        <meta property="og:url" content="{% abseventurl request.event "presale:event.index" subevent=subevent.pk %}" />
+    {% else %}
+        <meta property="og:url" content="{% abseventurl request.event "presale:event.index" %}" />
+    {% endif %}
+    <script type="text/javascript" src="{% static "pretixpresale/js/csrfcookieretry.js" %}"></script>
+{% endblock %}
+{% block content %}
+    {# laptopbuchung: persönlicher Einladungslink (Token) statt Gutschein #}
+    {% laptop_teilnehmer request.event request.GET.einladung as einladung_tn %}
+    {% if request.GET.fehler == "ungueltig" or request.GET.einladung and not einladung_tn %}
+        <div class="alert alert-danger"><p>Dieser Einladungslink ist ungültig. Bitte verwenden Sie den persönlichen Link aus Ihrer E-Mail.</p></div>
+    {% elif request.GET.fehler == "nicht_verfuegbar" %}
+        <div class="alert alert-danger"><p>Der gewählte Termin ist leider nicht mehr verfügbar. Bitte wählen Sie einen anderen Termin.</p></div>
+    {% elif request.GET.fehler == "technisch" %}
+        <div class="alert alert-danger"><p>Die Buchung ist fehlgeschlagen. Bitte versuchen Sie es erneut.</p></div>
+    {% endif %}
+    {% if einladung_tn %}
+        <div class="alert alert-info"><p>Hallo {{ einladung_tn.name }}, bitte wählen Sie einen Termin für die Abgabe Ihres Laptops
+        (Inventarnummer {{ einladung_tn.inventarnummer }}).</p></div>
+    {% else %}
+        <div class="alert alert-warning"><p>Die Terminbuchung ist nur über den persönlichen Link aus Ihrer E-Mail möglich.</p></div>
+    {% endif %}
+
+    {% autoescape off %}
+        <script type="application/ld+json">
+            {{ ev.event_microdata }}
+        </script>
+    {% endautoescape %}
+    {% if show_cart %}
+        {% include "pretixpresale/event/fragment_cart_box.html" with open=1 %}
+    {% endif %}
+
+    {% if request.event.has_subevents %}
+        {% if not subevent %}
+            {% if event_logo and event_logo_show_title %}
+                <h2 class="content-header">
+                    {{ event.name }}
+                </h2>
+            {% endif %}
+            {% if frontpage_text %}
+                <div>
+                    {{ frontpage_text|rich_text }}
+                </div>
+            {% endif %}
+
+            {% if request.GET.voucher %}
+                <div class="alert alert-info">
+                    <p>{% trans "Please select a date to redeem your voucher." %}</p>
+                </div>
+            {% endif %}
+        {% endif %}
+
+
+        {% if subevent_list.list_type != "list" or subevent_list.visible_events or "filtered" in request.GET %}
+            {% if subevent_list_foldable %}
+                <details class="panel panel-{% if show_cart %}primary{% else %}default{% endif %}">
+                <summary class="panel-heading">
+            {% else %}
+                <div class="panel panel-default">
+                <div class="panel-heading">
+            {% endif %}
+            <h2 class="panel-title"><strong>
+                {% if subevent_list_foldable %}
+                    {% if show_cart %}
+                        {% trans "Add tickets for a different date" %}
+                    {% else %}
+                        {% trans "View other date" %}
+                    {% endif %}
+                {% else %}
+                    {% trans "Choose date to book a ticket" %}
+                {% endif %}</strong>
+            </h2>
+            {% if subevent_list_foldable %}
+                </summary>
+                <div>
+            {% else %}
+                </div>
+            {% endif %}
+            {% if filter_form.fields %}
+                <div class="panel-subhead">
+                    {% include "pretixpresale/fragment_event_list_filter.html" with request=request %}
+                </div>
+            {% endif %}
+            <div class="panel-body">
+                {# laptopbuchung: Token gehört zum Cache-Schlüssel, sonst würden Links mit fremdem Token ausgeliefert #}
+                {% cache_large 15 subevent_list subevent_list_cache_key request.GET.einladung %}
+                    {% if subevent_list.list_type == "calendar" %}
+                        {% include "pretixpresale/event/fragment_subevent_calendar.html" %}
+                    {% elif subevent_list.list_type == "week" %}
+                        {% include "pretix_laptopbuchung/fragment_subevent_calendar_week.html" %}
+                    {% else %}
+                        {% include "pretixpresale/event/fragment_subevent_list.html" %}
+                    {% endif %}
+                {% endcache_large %}
+            </div>
+            {% if subevent_list_foldable %}
+                </div>
+                </details>
+            {% else %}
+                </div>
+            {% endif %}
+        {% endif %}
+
+        {% if subevent %}
+            <h2 class="subevent-head">{{ subevent.name }}</h2>
+            {% if frontpage_text %}
+                <div>
+                    {{ frontpage_text|rich_text }}
+                </div>
+            {% endif %}
+        {% endif %}
+    {% else %}
+        {% if event_logo and event_logo_show_title %}
+            <h2 class="content-header">
+                {{ event.name }}
+            </h2>
+        {% endif %}
+        {% if frontpage_text %}
+            <div>
+                {{ frontpage_text|rich_text }}
+            </div>
+        {% endif %}
+    {% endif %}
+
+    {% if subevent or not event.has_subevents %}
+        {% if not ev.presale_is_running %}
+            <div class="alert alert-info">
+                {% if ev.presale_has_ended %}
+                    {% if presale_has_ended_text %}
+                        {{ presale_has_ended_text|rich_text }}
+                    {% else %}
+                        {% blocktrans trimmed %}
+                            The booking period for this event is over.
+                        {% endblocktrans %}
+                    {% endif %}
+                {% elif event.settings.presale_start_show_date %}
+                    {% with date=ev.effective_presale_start|date:"SHORT_DATE_FORMAT" date_normalized=ev.effective_presale_start|date:"Y-m-d" %}
+                    {% with time=ev.effective_presale_start|time:"TIME_FORMAT" time_24h=ev.effective_presale_start|time:"H:i" %}
+                        <span data-time="{{ ev.effective_presale_start.isoformat }}" data-timezone="{{ request.event.timezone }}">
+                            {% blocktrans trimmed with date="<time datetime='"|add:date_normalized|add:"'>"|add:date|add:"</time>"|safe time="<time datetime='"|add:time_24h|add:"'>"|add:time|add:"</time>"|safe %}
+                                The booking period for this event will start on {{ date }} at {{ time }}.
+                            {% endblocktrans %}
+                        </span>
+                    {% endwith %}
+                    {% endwith %}
+                {% else %}
+                    {% blocktrans trimmed %}
+                        The booking period for this event has not yet started.
+                    {% endblocktrans %}
+                {% endif %}
+            </div>
+        {% endif %}
+        {% if not cart_namespace or subevent %}
+            <div{% if request.event.is_remote%} class="event-is-remote"{% endif %}>
+                {% include "pretixpresale/event/fragment_event_info.html" with event=request.event subevent=subevent ev=ev show_location=True %}
+            </div>
+            {% eventsignal event "pretix.presale.signals.front_page_top" request=request subevent=subevent %}
+        {% endif %}
+
+        {# laptopbuchung: Buchung des gewählten Termins nur mit gültigem Einladungslink #}
+        {% if subevent and ev.presale_is_running %}
+            {% with frei=subevent|plaetze_frei %}
+            <aside class="front-page" aria-labelledby="termin-buchen">
+                <h2 class="h3" id="termin-buchen">Diesen Termin buchen</h2>
+                {% if frei == 0 %}
+                    <div class="alert alert-warning">
+                        <p>Dieser Termin ist leider ausgebucht.
+                        <a href="{% eventurl request.event "presale:event.index" %}{% if einladung_tn %}?einladung={{ einladung_tn.token }}{% endif %}">Anderen Termin wählen</a></p>
+                    </div>
+                {% elif einladung_tn %}
+                    {% if frei != None %}<p>Noch {{ frei }} {% if frei == 1 %}Platz{% else %}Plätze{% endif %} frei.</p>{% endif %}
+                    <form method="post" action="{% eventurl request.event "plugins:pretix_laptopbuchung:buchen" %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="subevent" value="{{ subevent.id }}">
+                        <input type="hidden" name="einladung" value="{{ einladung_tn.token }}">
+                        <div class="row">
+                            <div class="col-md-8 col-sm-6 col-xs-12">
+                                <p>Buchung für <strong>{{ einladung_tn.name }}</strong>, Inventarnummer {{ einladung_tn.inventarnummer }}.
+                                <a href="{% eventurl request.event "presale:event.index" %}?einladung={{ einladung_tn.token }}">Anderen Termin wählen</a></p>
+                            </div>
+                            <div class="col-md-4 col-sm-6 col-xs-12">
+                                <button class="btn btn-block btn-primary btn-lg" type="submit" id="btn-buchen">
+                                    <i class="fa fa-check" aria-hidden="true"></i> Termin verbindlich buchen
+                                </button>
+                            </div>
+                            <div class="clearfix"></div>
+                        </div>
+                    </form>
+                {% else %}
+                    {% if frei != None %}<p>Noch {{ frei }} {% if frei == 1 %}Platz{% else %}Plätze{% endif %} frei.</p>{% endif %}
+                    <p>Bitte öffnen Sie die Terminbuchung über den persönlichen Link aus Ihrer E-Mail.</p>
+                {% endif %}
+            </aside>
+            {% endwith %}
+        {% endif %}
+    {% endif %}
+    {# laptopbuchung: Gutschein-Eingabe entfernt #}
+    {% if not cart_namespace %}
+        {% eventsignal event "pretix.presale.signals.front_page_bottom" subevent=subevent request=request %}
+        {# laptopbuchung: 'Link erneut senden' entfernt #}
+    {% else %}
+        {% eventsignal event "pretix.presale.signals.front_page_bottom_widget" subevent=subevent request=request %}
+    {% endif %}
+{% endblock %}

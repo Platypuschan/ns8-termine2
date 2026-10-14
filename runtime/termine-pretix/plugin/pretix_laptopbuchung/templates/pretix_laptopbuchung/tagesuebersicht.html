@@ -1,0 +1,38 @@
+{% extends "pretixcontrol/event/base.html" %}
+{% block title %}Tagesübersicht{% endblock %}
+{% block content %}
+    <div class="laptop-tag-kopf" data-laptop-autorefresh="60">
+        <div class="pull-right flip">
+            {% if vorher %}<a href="?tag={{ vorher|date:"Y-m-d" }}" class="btn btn-default"><span class="fa fa-chevron-left"></span> {{ vorher|date:"D d.m." }}</a>{% endif %}
+            {% if tag != heute %}<a href="?tag={{ heute|date:"Y-m-d" }}" class="btn btn-default">heute</a>{% endif %}
+            {% if nachher %}<a href="?tag={{ nachher|date:"Y-m-d" }}" class="btn btn-default">{{ nachher|date:"D d.m." }} <span class="fa fa-chevron-right"></span></a>{% endif %}
+        </div>
+        <h1>Tagesübersicht {{ tag|date:"l, d.m.Y" }}</h1>
+        <p class="text-muted">{{ summe }} Anwender an {{ slots|length }} Terminen · aktualisiert {{ jetzt|date:"H:i" }} Uhr (automatisch jede Minute)</p>
+    </div>
+    <div class="laptop-tag-raster">
+        {% for s in slots %}
+            {% url "plugins:pretix_laptopbuchung:termin" organizer=request.event.organizer.slug event=request.event.slug subevent=s.se.pk as termin_url %}
+            <div class="panel {% if s.belegt %}panel-primary{% else %}panel-default{% endif %} laptop-tag-kachel">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><a href="{{ termin_url }}">{{ s.se.date_from|date:"H:i" }}–{{ s.se.date_to|date:"H:i" }}</a>
+                        <span class="pull-right flip">{{ s.belegt|length }}{% if s.groesse %}/{{ s.groesse }}{% endif %}</span></h3>
+                </div>
+                <ul class="list-group">
+                    {% for r in s.anwender %}
+                        <li class="list-group-item">
+                            {% if r.status == "ausgegeben" %}<span class="label label-success pull-right flip">ausgegeben</span>
+                            {% elif r.status == "abgegeben" %}<span class="label label-warning pull-right flip">im Service</span>
+                            {% elif r.status == "nicht_erschienen" %}<span class="label label-danger pull-right flip">nicht erschienen</span>{% endif %}
+                            <strong>{{ r.tn.name }}</strong><br><span class="text-muted">{{ r.tn.inventarnummer }}</span>
+                        </li>
+                    {% empty %}
+                        <li class="list-group-item text-muted">frei</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% empty %}
+            <p class="text-muted">An diesem Tag gibt es keine Termine.</p>
+        {% endfor %}
+    </div>
+{% endblock %}

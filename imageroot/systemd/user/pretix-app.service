@@ -1,0 +1,37 @@
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+
+# pretix mit Plugin pretix_laptopbuchung (nginx, gunicorn, celery). Migrationen laufen beim Start.
+# Das Datenvolume nutzt das gemeinsame SELinux-Label (:z), weil die Sicherung es aus einem zweiten Container liest.
+
+[Unit]
+Description=Terminvergabe pretix
+BindsTo=termine.service
+After=termine.service postgresql-app.service redis-app.service
+
+[Service]
+Environment=PODMAN_SYSTEMD_UNIT=%n
+EnvironmentFile=%E/state/environment
+WorkingDirectory=%E/state
+Restart=always
+TimeoutStartSec=300
+TimeoutStopSec=70
+ExecStartPre=/bin/rm -f %t/pretix-app.pid %t/pretix-app.ctr-id
+ExecStartPre=/usr/bin/touch mail.env
+ExecStartPre=-runagent discover-mail
+ExecStart=/usr/bin/podman run --conmon-pidfile %t/pretix-app.pid \
+    --cidfile %t/pretix-app.ctr-id --cgroups=no-conmon \
+    --pod-id-file %t/termine.pod-id --replace -d --name pretix-app \
+    --env-file=%E/state/pretix.env \
+    --env-file=%E/state/mail.env \
+    --volume pretix-data:/data:z \
+    ${TERMINE2_RUNTIME_IMAGE} all
+ExecStop=/usr/bin/podman stop --ignore --cidfile %t/pretix-app.ctr-id -t 30
+ExecStopPost=/usr/bin/podman rm --ignore -f --cidfile %t/pretix-app.ctr-id
+SyslogIdentifier=%u
+PIDFile=%t/pretix-app.pid
+Type=forking
+
+[Install]
+WantedBy=default.target

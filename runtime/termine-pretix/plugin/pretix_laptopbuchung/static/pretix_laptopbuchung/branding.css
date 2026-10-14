@@ -1,0 +1,43 @@
+/* Branding der Verwaltung (Farben der Uniklinik-Homepage). Logo-Dateien liegen lokal in branding/ (nicht im Repo). */
+:root {
+    --pretix-brand-primary: #004077 !important;
+    --pretix-brand-primary-lighten-5: #004e90 !important;
+    --pretix-brand-primary-lighten-20: #0077dd !important;
+    --pretix-brand-primary-lighten-30: #1191ff !important;
+    --pretix-brand-primary-lighten-40: #44a9ff !important;
+    --pretix-brand-primary-lighten-48: #6dbbff !important;
+    --pretix-brand-primary-lighten-50: #77c0ff !important;
+    --pretix-brand-primary-lighten-53: #86c7ff !important;
+    --pretix-brand-primary-lighten-55: #91ccff !important;
+    --pretix-brand-primary-darken-5: #00325e !important;
+    --pretix-brand-primary-darken-10: #002544 !important;
+    --pretix-brand-primary-darken-15: #00172b !important;
+    --pretix-brand-primary-darken-17: #001120 !important;
+    --pretix-brand-primary-darken-20: #000911 !important;
+    --pretix-brand-primary-darken-30: #000000 !important;
+    --pretix-brand-primary-tint-90: #e6ecf1 !important;
+    --pretix-brand-primary-shade-25: #003059 !important;
+    --pretix-brand-primary-shade-42: #002545 !important;
+    --pretix-brand-primary-lighten-28-saturate-20: #078cff !important;
+    --pretix-brand-primary-lighten-23-saturate-2: #007fec !important;
+}
+:root {
+    --pretix-link-contrast-color: #004077 !important;
+    --pretix-link-hover-contrast-color: #0f2d64 !important;
+    --laptop-dunkelblau: #0f2d64;
+    --laptop-hellblau: #eef5fc;
+    --laptop-graublau: #cbd8e3;
+}
+/* Kopfleiste dunkelblau, Logo statt pretix-Symbol */
+.navbar-inverse, .navbar-inverse .navbar-header { background-color: var(--laptop-dunkelblau) !important; border-color: var(--laptop-dunkelblau) !important; }
+.navbar-inverse .navbar-nav > li > a:hover, .navbar-inverse .navbar-nav > li > a:focus { background-color: #004077 !important; }
+.navbar-brand img { display: none !important; }
+.navbar-brand::before {
+    content: ""; display: inline-block; vertical-align: middle; margin-right: 10px;
+    width: 92px; height: 32px; background: url("branding/logo-weiss.svg") no-repeat left center / contain;
+}
+/* Seitenmenü: aktive und überfahrene Punkte in Hellblau */
+#side-menu > li > a.active, #side-menu > li.active > a, #side-menu a:hover { background-color: var(--laptop-hellblau) !important; }
+.sidebar ul li { border-bottom-color: var(--laptop-graublau) !important; }
+/* Anmeldeseite */
+img.logo[src*="pretix-logo"] { content: url("branding/logo.svg"); max-height: 80px; }
