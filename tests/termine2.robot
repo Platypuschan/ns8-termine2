@@ -106,6 +106,12 @@ Update module from the previous release
     &{config} =    Konten prüfen
     Should Be Equal    ${config.admins}    ${konten_vorher.admins}    die Konten müssen das Update überstehen
 
+Startseite zeigt das Terminportal
+    ${body} =    Execute Command    curl -sk --max-time 10 --resolve ${HOST}:443:127.0.0.1 https://${HOST}/
+    Should Contain    ${body}    Terminportal des UK-IT-Services
+    Should Contain    ${body}    href="/control/login"
+    Should Contain    ${body}    pretix_laptopbuchung/branding.
+
 Externer SMTP-Server braucht einen Host
     ${output}    ${rc} =    Run action    configure-module    {"host":"${HOST}","http2https":false,"lets_encrypt":false,"mail_mode":"external","smtp":{"host":""}}
     Should Not Be Equal As Integers    ${rc}    0
