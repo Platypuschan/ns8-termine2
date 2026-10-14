@@ -10,9 +10,10 @@ from django.views.generic import TemplateView, View
 from pretix.base.models import Checkin
 from pretix.control.permissions import EventPermissionRequiredMixin
 
+from .admin_only import ist_admin
 from .models import Teilnehmer
 from .services import (
-    STATUS, abgabe_buchen, anwender_status, ausgabe_buchen, einladen, einladungslink, importiere, lese_csv,
+    STATUS, abgabe_buchen, anlegen, anwender_status, ausgabe_buchen, einladen, einladungslink, importiere, lese_csv,
     scan_zuruecknehmen,
 )
 
@@ -52,6 +53,8 @@ class AnwenderView(EventPermissionRequiredMixin, TemplateView):
         ]
         ctx["darf_schreiben"] = self.request.user.has_event_permission(
             self.request.organizer, self.request.event, "event.orders:write", request=self.request)
+        # CSV-Import nur für Administratoren; das IT-Team legt Anwender einzeln an
+        ctx["darf_importieren"] = ctx["darf_schreiben"] and ist_admin(self.request)
         return ctx
 
 
@@ -70,7 +73,18 @@ class AktionView(EventPermissionRequiredMixin, View):
         tn_pk = request.POST.get("tn")
         if ":" in aktion:  # Zeilen-Schaltflächen: "<aktion>:<anwender-id>"
             aktion, tn_pk = aktion.split(":", 1)
-        if aktion == "import":
+        if aktion == "anlegen":
+            try:
+                tn = anlegen(event, request.POST.get("name", ""), request.POST.get("email", ""),
+                             request.POST.get("inventarnummer", ""), request.POST.get("welle", ""), user=request.user)
+            except ValueError as e:
+                messages.error(request, f"Anwender nicht angelegt: {e}")
+            else:
+                messages.success(request, f"{tn.name} ({tn.inventarnummer}) angelegt – {tn.welle}, noch nicht eingeladen.")
+        elif aktion == "import":
+            if not ist_admin(request):
+                messages.error(request, "Der CSV-Import ist nur für Administratoren möglich.")
+                return redirect(_url(request))
             f = request.FILES.get("datei")
             welle = request.POST.get("welle", "").strip()
             if not f or not welle:

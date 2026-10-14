@@ -40,6 +40,13 @@ Login
     ${output} =    Execute Command    /root/termine-login.sh https://${HOST} '${login}' '${passwort}' --resolve ${HOST}:443:127.0.0.1
     RETURN    ${output}
 
+Seite als
+    [Arguments]    ${login}    ${passwort}    ${pfad}
+    Put File    ${CURDIR}/termine-login.sh    /root/termine-login.sh    mode=0755
+    ${output} =    Execute Command    SEITE='${pfad}' /root/termine-login.sh https://${HOST} '${login}' '${passwort}' --resolve ${HOST}:443:127.0.0.1
+    Should Start With    ${output}    ok    Anmeldung ${login}: ${output}
+    RETURN    ${output}
+
 Login gelingt
     [Arguments]    ${login}    ${passwort}
     ${output} =    Login    ${login}    ${passwort}
@@ -111,6 +118,16 @@ Startseite zeigt das Terminportal
     Should Contain    ${body}    Terminportal des UK-IT-Services
     Should Contain    ${body}    href="/control/login"
     Should Contain    ${body}    pretix_laptopbuchung/branding.
+
+IT-Team legt Anwender nur einzeln an
+    &{config} =    Get configuration
+    ${pfad} =    Set Variable    /control/event/it/laptop/laptopbuchung/
+    ${it} =    Seite als    ${config.mitarbeiter}[0][login]    ${config.mitarbeiter}[0][passwort]    ${pfad}
+    Should Contain    ${it}    Anwender anlegen
+    Should Not Contain    ${it}    CSV-Import
+    ${admin} =    Seite als    ${config.admins}[0][login]    ${config.admins}[0][passwort]    ${pfad}
+    Should Contain    ${admin}    Anwender anlegen
+    Should Contain    ${admin}    CSV-Import (nur Administratoren)
 
 Externer SMTP-Server braucht einen Host
     ${output}    ${rc} =    Run action    configure-module    {"host":"${HOST}","http2https":false,"lets_encrypt":false,"mail_mode":"external","smtp":{"host":""}}

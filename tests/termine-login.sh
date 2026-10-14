@@ -1,6 +1,7 @@
 #!/bin/bash
 # Meldet sich an der pretix-Verwaltung an; gibt "ok" aus, wenn pretix nach /control/ weiterleitet.
 # Aufruf: termine-login.sh <basis-url> <login> <passwort> [curl-optionen…]
+# Mit SEITE=<pfad> wird diese Seite nach der Anmeldung zusätzlich abgerufen und ausgegeben.
 set -euo pipefail
 basis="$1" login="$2" passwort="$3"
 shift 3
@@ -14,5 +15,8 @@ ziel="$("${c[@]}" -o /dev/null -w '%{redirect_url}' -H "Referer: ${basis}/contro
     --data-urlencode "password=${passwort}" "${basis}/control/login")"
 case "${ziel}" in
     */control/ | */control/\?*) echo ok ;;
-    *) echo "fehlgeschlagen: ${ziel:-keine Weiterleitung}" ;;
+    *) echo "fehlgeschlagen: ${ziel:-keine Weiterleitung}"; exit 0 ;;
 esac
+if [[ -n "${SEITE:-}" ]]; then
+    "${c[@]}" "${basis}${SEITE}"
+fi

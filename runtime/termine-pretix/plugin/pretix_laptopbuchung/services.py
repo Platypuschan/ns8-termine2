@@ -85,6 +85,31 @@ def importiere(event, rows, welle, user=None):
     return result
 
 
+@transaction.atomic
+def anlegen(event, name, email, inventarnummer, welle, user=None):
+    """Legt einen einzelnen Anwender an (Verwaltung, ohne CSV). ValueError bei fehlenden/ungültigen/doppelten Angaben."""
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    name, email, inventarnummer, welle = (x.strip() for x in (name, email, inventarnummer, welle))
+    if not (name and email and inventarnummer and welle):
+        raise ValueError("Bitte Name, E-Mail, Inventarnummer und Welle angeben.")
+    try:
+        validate_email(email)
+    except ValidationError:
+        raise ValueError(f"„{email}“ ist keine gültige E-Mail-Adresse.")
+    doppelt = Teilnehmer.objects.filter(event=event, email__iexact=email).first()
+    if doppelt:
+        raise ValueError(f"Die E-Mail-Adresse {email} ist schon vergeben ({doppelt.name}).")
+    doppelt = Teilnehmer.objects.filter(event=event, inventarnummer__iexact=inventarnummer).first()
+    if doppelt:
+        raise ValueError(f"Die Inventarnummer {inventarnummer} ist schon vergeben ({doppelt.name}).")
+    tn = Teilnehmer.objects.create(event=event, name=name, email=email, inventarnummer=inventarnummer, welle=welle)
+    event.log_action("pretix_laptopbuchung.anwender.angelegt", user=user,
+                     data={"teilnehmer": tn.pk, "email": tn.email, "welle": welle})
+    return tn
+
+
 def einladen(tn, user=None):
     """Schickt die Einladungsmail mit persönlichem Link und merkt sich Zeitpunkt und Anzahl."""
     event = tn.event

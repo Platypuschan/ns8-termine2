@@ -21,7 +21,7 @@
         <div class="col-md-6">
             <div class="panel panel-default">
                 <div class="panel-heading"><h3 class="panel-title">Einladungen verschicken</h3></div>
-                <div class="panel-body laptop-hinweis"><p class="help-block">Importierte Anwender werden erst angeschrieben, wenn Sie hier einladen. Mit „Anzahl“ nur die nächsten N noch nicht angeschriebenen der Welle einladen (gestaffelt).</p></div>
+                <div class="panel-body laptop-hinweis"><p class="help-block">Neue Anwender werden erst angeschrieben, wenn Sie hier einladen. Mit „Anzahl“ nur die nächsten N noch nicht angeschriebenen der Welle einladen (gestaffelt).</p></div>
                 <div class="panel-body">
                     {% for welle, offen in offen_je_welle %}
                         <form method="post" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="form-inline laptop-welle">
@@ -46,15 +46,33 @@
         </div>
         <div class="col-md-6">
             <div class="panel panel-default">
-                <div class="panel-heading"><h3 class="panel-title">Anwender importieren (CSV: name;email;inventarnummer)</h3></div>
+                <div class="panel-heading"><h3 class="panel-title">Anwender anlegen</h3></div>
                 <div class="panel-body">
-                    <form method="post" enctype="multipart/form-data" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="form-inline">
+                    <form method="post" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="laptop-anlegen">
                         {% csrf_token %}
-                        <input type="hidden" name="aktion" value="import">
-                        <input type="text" name="welle" class="form-control" placeholder="Welle, z. B. Welle 2" required>
-                        <input type="file" name="datei" accept=".csv,text/csv" required class="laptop-datei">
-                        <button type="submit" class="btn btn-default"><span class="fa fa-upload"></span> importieren</button>
+                        <input type="hidden" name="aktion" value="anlegen">
+                        <div class="row">
+                            <div class="col-sm-6 form-group"><input type="text" name="name" class="form-control" placeholder="Name" required maxlength="255"></div>
+                            <div class="col-sm-6 form-group"><input type="email" name="email" class="form-control" placeholder="E-Mail" required maxlength="254"></div>
+                            <div class="col-sm-6 form-group"><input type="text" name="inventarnummer" class="form-control" placeholder="Inventarnummer" required maxlength="100"></div>
+                            <div class="col-sm-6 form-group"><input type="text" name="welle" class="form-control" placeholder="Welle, z. B. Welle 2" required maxlength="100" list="laptop-wellen"></div>
+                        </div>
+                        <datalist id="laptop-wellen">{% for w in wellen %}<option value="{{ w }}">{% endfor %}</datalist>
+                        <button type="submit" class="btn btn-default"><span class="fa fa-user-plus"></span> anlegen</button>
+                        <span class="help-block">Der Anwender wird erst angeschrieben, wenn Sie ihn einladen.</span>
                     </form>
+                    {% if darf_importieren %}
+                        <hr>
+                        <h4>CSV-Import (nur Administratoren)</h4>
+                        <p class="help-block">Spalten: name;email;inventarnummer</p>
+                        <form method="post" enctype="multipart/form-data" action="{% url "plugins:pretix_laptopbuchung:aktion" organizer=request.event.organizer.slug event=request.event.slug %}" class="form-inline">
+                            {% csrf_token %}
+                            <input type="hidden" name="aktion" value="import">
+                            <input type="text" name="welle" class="form-control" placeholder="Welle, z. B. Welle 2" required>
+                            <input type="file" name="datei" accept=".csv,text/csv" required class="laptop-datei">
+                            <button type="submit" class="btn btn-default"><span class="fa fa-upload"></span> importieren</button>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
         </div>
