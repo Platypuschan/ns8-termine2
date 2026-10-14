@@ -118,6 +118,9 @@ Startseite zeigt das Terminportal
     Should Contain    ${body}    Terminportal des UK-IT-Services
     Should Contain    ${body}    href="/control/login"
     Should Contain    ${body}    pretix_laptopbuchung/branding.
+    # Favicon der Uniklinik (static-ueberschreiben) statt des pretix-Icons
+    ${favicon} =    Execute Command    curl -sk --max-time 10 --resolve ${HOST}:443:127.0.0.1 "https://${HOST}$(curl -sk --max-time 10 --resolve ${HOST}:443:127.0.0.1 https://${HOST}/ | grep -o '/static/pretixbase/img/favicon[.][0-9a-f]*[.]ico' | head -1)" | sha256sum | cut -d' ' -f1
+    Should Be Equal    ${favicon}    f4ced46e15a990321ee53908ba16b31999c86250dc91e2c0b56d7081ca9733a7
 
 IT-Team legt Anwender nur einzeln an
     &{config} =    Get configuration
