@@ -673,9 +673,18 @@ export default {
       console.error("reset-passwords aborted", taskResult, taskContext);
       this.error.resetPasswords = this.$t("error.generic_error");
       this.loading.resetPasswords = "";
+      // Nach einem verlorenen Task-Ergebnis können die alten Zugangsdaten
+      // bereits ungültig sein. Das Backend nimmt das Journal beim Laden wieder auf.
+      this.admins = [];
+      this.mitarbeiter = [];
+      this.sichtbar = {};
+      this.getConfiguration();
     },
     resetPasswordsCompleted() {
       this.loading.resetPasswords = "";
+      this.admins = [];
+      this.mitarbeiter = [];
+      this.sichtbar = {};
       this.getConfiguration();
     },
   },
