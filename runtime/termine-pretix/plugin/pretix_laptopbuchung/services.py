@@ -53,35 +53,102 @@ def verkaufskanal(organizer):
     return sc
 
 
+def _anwender_pruefen(row, zeile):
+    from django.core.exceptions import ValidationError
+    from django.core.validators import validate_email
+
+    for field, limit in (("name", 255), ("email", 254), ("inventarnummer", 100)):
+        if not row.get(field):
+            raise ValueError(f"Zeile {zeile}: {field} fehlt.")
+        if len(row[field]) > limit:
+            raise ValueError(f"Zeile {zeile}: {field} darf höchstens {limit} Zeichen enthalten.")
+    try:
+        validate_email(row["email"])
+    except ValidationError:
+        raise ValueError(f"Zeile {zeile}: ungültige E-Mail-Adresse „{row['email']}“.") from None
+
+
 def lese_csv(text):
-    """CSV (Trenner , oder ;) mit Spalten name, email, inventarnummer -> Liste von Dicts."""
+    """CSV mit Kopfzeile name,email,inventarnummer; Fehler enthalten die Dateizeile."""
     text = text.lstrip("﻿")
-    lines = text.splitlines()
-    if not lines:
+    if not text.strip():
         raise ValueError("Die Datei ist leer.")
-    dialect = csv.Sniffer().sniff(lines[0], delimiters=",;")
-    rows = [{(k or "").strip().lower(): (v or "").strip() for k, v in r.items()}
-            for r in csv.DictReader(io.StringIO(text), dialect=dialect)]
-    fehlend = {"name", "email", "inventarnummer"} - set(rows[0].keys() if rows else [])
-    if fehlend:
-        raise ValueError(f"Spalten fehlen: {', '.join(sorted(fehlend))}")
-    return [r for r in rows if r["email"]]
+    try:
+        dialect = csv.Sniffer().sniff(text.splitlines()[0], delimiters=",;")
+        reader = csv.DictReader(io.StringIO(text, newline=""), dialect=dialect, strict=True)
+        fields = [(field or "").strip().lower() for field in (reader.fieldnames or [])]
+        if len(fields) != len(set(fields)) or "" in fields:
+            raise ValueError("Die Kopfzeile enthält leere oder doppelte Spalten.")
+        fehlend = {"name", "email", "inventarnummer"} - set(fields)
+        if fehlend:
+            raise ValueError(f"Spalten fehlen: {', '.join(sorted(fehlend))}")
+        reader.fieldnames = fields
+        rows, emails, inventar = [], set(), set()
+        for row in reader:
+            zeile = reader.line_num
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError(f"Zeile {zeile}: Spaltenzahl stimmt nicht mit der Kopfzeile überein.")
+            row = {key: value.strip() for key, value in row.items()}
+            if not any(row.values()):
+                continue
+            _anwender_pruefen(row, zeile)
+            for field, seen in (("email", emails), ("inventarnummer", inventar)):
+                value = row[field].casefold()
+                if value in seen:
+                    raise ValueError(f"Zeile {zeile}: {field} „{row[field]}“ kommt mehrfach vor.")
+                seen.add(value)
+            row["_zeile"] = zeile
+            rows.append(row)
+    except csv.Error as error:
+        raise ValueError(f"Ungültige CSV-Datei (Komma oder Semikolon als Trenner erforderlich): {error}") from error
+    if not rows:
+        raise ValueError("Die Datei enthält keine Anwender.")
+    return rows
 
 
 @transaction.atomic
 def importiere(event, rows, welle, user=None):
-    """Legt neue Anwender an (bekannte E-Mail-Adressen werden übersprungen). Rückgabe: [(Teilnehmer, neu)]."""
+    """Validiert die gesamte Liste vor dem Schreiben; bekannte identische Konten werden übersprungen."""
+    from django.db import IntegrityError
+
+    welle = welle.strip()
+    if not welle or len(welle) > 100:
+        raise ValueError("Bitte eine Welle mit 1 bis 100 Zeichen angeben.")
+    existing = list(Teilnehmer.objects.filter(event=event))
+    by_email = {tn.email.casefold(): tn for tn in existing}
+    by_inventory = {tn.inventarnummer.casefold(): tn for tn in existing}
+    planned, emails, inventory = [], set(), set()
+    for number, raw in enumerate(rows, 2):
+        row = {key: str(raw.get(key, "")).strip() for key in ("name", "email", "inventarnummer")}
+        zeile = raw.get("_zeile", number)
+        _anwender_pruefen(row, zeile)
+        email, inv = row["email"].casefold(), row["inventarnummer"].casefold()
+        if email in emails or inv in inventory:
+            raise ValueError(f"Zeile {zeile}: E-Mail-Adresse oder Inventarnummer kommt mehrfach vor.")
+        emails.add(email)
+        inventory.add(inv)
+        tn = by_email.get(email)
+        if tn and tn.inventarnummer.casefold() != inv:
+            raise ValueError(f"Zeile {zeile}: E-Mail-Adresse gehört bereits zur Inventarnummer {tn.inventarnummer}.")
+        owner = by_inventory.get(inv)
+        if owner is not None and (tn is None or owner.pk != tn.pk):
+            raise ValueError(f"Zeile {zeile}: Inventarnummer „{row['inventarnummer']}“ ist bereits vergeben.")
+        planned.append((row, tn))
     result = []
-    for r in rows:
-        tn = Teilnehmer.objects.filter(event=event, email__iexact=r["email"]).first()
-        if tn:
-            result.append((tn, False))
-            continue
-        tn = Teilnehmer.objects.create(event=event, name=r["name"], email=r["email"],
-                                       inventarnummer=r["inventarnummer"], welle=welle)
-        event.log_action("pretix_laptopbuchung.anwender.importiert", user=user,
-                         data={"teilnehmer": tn.pk, "email": tn.email, "welle": welle})
-        result.append((tn, True))
+    try:
+        # Savepoint: ein paralleler Import darf keinen Teilimport hinterlassen.
+        with transaction.atomic():
+            for row, tn in planned:
+                if tn:
+                    result.append((tn, False))
+                    continue
+                tn = Teilnehmer.objects.create(event=event, name=row["name"], email=row["email"],
+                                               inventarnummer=row["inventarnummer"], welle=welle)
+                event.log_action("pretix_laptopbuchung.anwender.importiert", user=user,
+                                 data={"teilnehmer": tn.pk, "email": tn.email, "welle": welle})
+                result.append((tn, True))
+    except IntegrityError:
+        raise ValueError("E-Mail-Adresse oder Inventarnummer wurde gleichzeitig angelegt; bitte Liste erneut prüfen.") from None
     return result
 
 
@@ -131,7 +198,26 @@ def aktive_buchung(tn):
     b = (Buchung.objects.filter(teilnehmer=tn, position__canceled=False,
                                 position__order__status__in=(Order.STATUS_PAID, Order.STATUS_PENDING))
          .select_related("position__order", "position__subevent").order_by("-erstellt").first())
-    return b.position if b else None
+    if b:
+        return b.position
+    # Repariert ältere, bereits committete Bestellungen ohne Plugin-Zuordnung.
+    # Metadaten werden von pretix zusammen mit der Bestellung gespeichert.
+    orders = (tn.event.orders.filter(
+        status__in=(Order.STATUS_PAID, Order.STATUS_PENDING),
+        sales_channel__identifier=VERKAUFSKANAL, all_positions__laptop_buchung__isnull=True,
+    ).distinct().prefetch_related("all_positions"))
+    for order in orders:
+        pk = (order.meta_info_data or {}).get("laptopbuchung", {}).get("teilnehmer")
+        if pk != tn.pk:
+            continue
+        for position in order.positions.all():
+            if not position.canceled:
+                Buchung.objects.get_or_create(position=position, defaults={"teilnehmer": tn})
+        b = (Buchung.objects.filter(teilnehmer=tn, position__order=order, position__canceled=False)
+             .select_related("position__order", "position__subevent").first())
+        if b:
+            return b.position
+    return None
 
 
 class BereitsGebucht(Exception):
@@ -210,11 +296,17 @@ def buchen(tn, subevent_id, user=None, ueberbuchen=False):
             raise BuchungFehlgeschlagen("nicht_verfuegbar", str(e))
         except Exception as e:
             _aufraeumen(event, cart_id, zuweisung)
+            # Mail-/Nacharbeiten können nach dem Commit fehlschlagen. Die Buchung
+            # bleibt dann gültig; keinen Fehler mit erneutem Buchungsversuch anbieten.
+            op = aktive_buchung(tn)
+            if op:
+                logger.exception("Buchung gespeichert, Nachverarbeitung fehlgeschlagen")
+                return op
             logger.exception("Buchung fehlgeschlagen")
             raise BuchungFehlgeschlagen("technisch", str(e))
         order = event.orders.get(pk=result["order_id"])
         for p in order.positions.all():
-            Buchung.objects.create(teilnehmer=tn, position=p)
+            Buchung.objects.get_or_create(position=p, defaults={"teilnehmer": tn})
         if user:
             order.log_action("pretix_laptopbuchung.zugewiesen", user=user, data={"teilnehmer": tn.pk})
         return order.positions.first()

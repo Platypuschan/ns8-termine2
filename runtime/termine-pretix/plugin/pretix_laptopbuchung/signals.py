@@ -1,11 +1,25 @@
 from django.dispatch import receiver
 
 from pretix.base.services.placeholders import SimpleFunctionalTextPlaceholder
-from pretix.base.signals import register_mail_placeholders
+from pretix.base.signals import order_placed, register_mail_placeholders
+
+
+@receiver(order_placed, dispatch_uid="laptopbuchung_order_link")
+def buchung_verknuepfen(sender, order, **kwargs):
+    """Läuft in pretix' Bestelltransaktion: Bestellung und Zuordnung committen gemeinsam."""
+    from .models import Buchung, Teilnehmer
+
+    pk = (order.meta_info_data or {}).get("laptopbuchung", {}).get("teilnehmer")
+    if pk is None:
+        return
+    tn = Teilnehmer.objects.get(pk=pk, event=sender)
+    for position in order.positions.all():
+        Buchung.objects.get_or_create(position=position, defaults={"teilnehmer": tn})
+
 
 
 def _teilnehmer(order):
-    """Anwender zur Bestellung (aus meta_info; die Buchungs-Verknüpfung entsteht erst nach dem Mailversand)."""
+    """Anwender zur Bestellung aus den gemeinsam gespeicherten Bestell-Metadaten."""
     from .models import Teilnehmer
     pk = (order.meta_info_data or {}).get("laptopbuchung", {}).get("teilnehmer")
     return Teilnehmer.objects.filter(pk=pk).first() if pk else None

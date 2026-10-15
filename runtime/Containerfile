@@ -17,7 +17,7 @@ RUN B=/tmp/plugin/pretix_laptopbuchung/static/pretix_laptopbuchung/branding && m
 # Favicon und App-Icons der Uniklinik (von uk-koeln.de) ersetzen die pretix-Icons gleichen Namens
 COPY termine-pretix/static-ueberschreiben/ /pretix/src/pretix/static/
 COPY termine-pretix/templates /opt/termine/templates
-COPY termine-pretix/setup_demo.py termine-pretix/anwender-welle1.csv termine-pretix/anwender-welle2.csv /opt/termine/
+COPY termine-pretix/terminplan.py termine-pretix/setup_demo.py termine-pretix/anwender-welle1.csv termine-pretix/anwender-welle2.csv /opt/termine/
 COPY docker/konten.py /opt/termine/
 COPY docker/entrypoint.sh /usr/local/bin/termine-entrypoint
 RUN chmod 755 /usr/local/bin/termine-entrypoint && chown -R pretixuser:pretixuser /opt/termine

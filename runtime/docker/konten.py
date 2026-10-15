@@ -39,7 +39,8 @@ with scopes_disabled(), transaction.atomic():
         user = User.objects.filter(email__iexact=login).first()
         if user is None:
             user = User.objects.create_user(login, konto["passwort"])
-        else:
+        elif not user.check_password(konto["passwort"]):
+            # Unveränderte Passwörter behalten ihren Hash und damit laufende Sitzungen.
             user.set_password(konto["passwort"])
         user.fullname = konto.get("name", "")
         user.locale = "de"

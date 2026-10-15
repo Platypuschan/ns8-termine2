@@ -40,8 +40,12 @@
               :disabled="busy"
               class="mg-bottom"
             >
-              <template slot="text-left">{{ $t("settings.disabled") }}</template>
-              <template slot="text-right">{{ $t("settings.enabled") }}</template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
             </cv-toggle>
             <cv-toggle
               value="httpToHttps"
@@ -50,10 +54,50 @@
               :disabled="busy"
               class="mg-bottom"
             >
-              <template slot="text-left">{{ $t("settings.disabled") }}</template>
-              <template slot="text-right">{{ $t("settings.enabled") }}</template>
+              <template slot="text-left">{{
+                $t("settings.disabled")
+              }}</template>
+              <template slot="text-right">{{
+                $t("settings.enabled")
+              }}</template>
             </cv-toggle>
 
+            <h4 class="mg-bottom-sm">{{ $t("settings.schedule_title") }}</h4>
+            <p class="mg-bottom helper">{{ $t("settings.schedule_helper") }}</p>
+            <div class="smtp-grid mg-bottom">
+              <cv-text-input
+                :label="$t('settings.start_date')"
+                type="date"
+                v-model="initialSchedule.start_date"
+                :disabled="busy"
+              />
+              <cv-text-input
+                v-for="field in ['weeks', 'slot_minutes', 'capacity']"
+                :key="field"
+                :label="$t('settings.' + field)"
+                type="number"
+                v-model="initialSchedule[field]"
+                :disabled="busy"
+              />
+              <cv-text-input
+                :label="$t('settings.location')"
+                v-model.trim="initialSchedule.location"
+                :disabled="busy"
+              />
+              <cv-text-input
+                :label="$t('settings.contact_email')"
+                type="email"
+                v-model.trim="initialSchedule.contact_email"
+                :disabled="busy"
+              />
+            </div>
+            <NsInlineNotification
+              v-if="error.initial_schedule"
+              kind="error"
+              :title="$t('settings.schedule_title')"
+              :description="$t(error.initial_schedule)"
+              :showCloseButton="false"
+            />
             <h4 class="mg-bottom-sm">{{ $t("settings.mail_title") }}</h4>
             <cv-radio-group
               :label="$t('settings.mail_mode')"
@@ -171,9 +215,13 @@
           <h4 class="mg-bottom-sm">{{ $t("settings.accounts_title") }}</h4>
           <p class="mg-bottom helper">
             {{ $t("settings.accounts_description") }}
-            <a v-if="controlUrl" :href="controlUrl" target="_blank" rel="noopener">{{
-              controlUrl
-            }}</a>
+            <a
+              v-if="controlUrl"
+              :href="controlUrl"
+              target="_blank"
+              rel="noopener"
+              >{{ controlUrl }}</a
+            >
           </p>
           <NsInlineNotification
             v-if="error.resetPasswords"
@@ -182,11 +230,7 @@
             :description="error.resetPasswords"
             :showCloseButton="false"
           />
-          <div
-            v-for="gruppe in gruppen"
-            :key="gruppe.key"
-            class="mg-bottom"
-          >
+          <div v-for="gruppe in gruppen" :key="gruppe.key" class="mg-bottom">
             <h5 class="mg-bottom-sm">{{ $t(gruppe.title) }}</h5>
             <table class="bx--data-table bx--data-table--compact konten">
               <thead>
@@ -202,7 +246,9 @@
                   <td class="mono">{{ konto.login }}</td>
                   <td>{{ konto.name }}</td>
                   <td class="mono">
-                    {{ sichtbar[konto.login] ? konto.passwort : "••••••••••••" }}
+                    {{
+                      sichtbar[konto.login] ? konto.passwort : "••••••••••••"
+                    }}
                   </td>
                   <td class="aktionen">
                     <NsButton
@@ -232,7 +278,7 @@
                       size="small"
                       :icon="Renew20"
                       :loading="loading.resetPasswords === konto.login"
-                      :disabled="!!loading.resetPasswords"
+                      :disabled="busy"
                       @click="resetPasswords(konto.login)"
                       >{{ $t("settings.regenerate") }}</NsButton
                     >
@@ -245,7 +291,7 @@
             kind="secondary"
             :icon="Renew20"
             :loading="loading.resetPasswords === '*'"
-            :disabled="!!loading.resetPasswords"
+            :disabled="busy"
             @click="resetPasswords(null)"
             >{{ $t("settings.regenerate_all") }}</NsButton
           >
@@ -293,9 +339,23 @@ export default {
       host: "",
       isLetsEncryptEnabled: false,
       isHttpToHttpsEnabled: true,
+      initialSchedule: {
+        start_date: "",
+        weeks: 2,
+        slot_minutes: 30,
+        capacity: 2,
+        location: "IT-Abteilung",
+        contact_email: "",
+      },
       mailMode: "smarthost",
       mailFrom: "",
-      smtp: { host: "", port: "587", username: "", password: "", encryption: "starttls" },
+      smtp: {
+        host: "",
+        port: "587",
+        username: "",
+        password: "",
+        encryption: "starttls",
+      },
       smtpPasswordSet: false,
       smarthostAvailable: false,
       smarthostHost: "",
@@ -316,6 +376,7 @@ export default {
         host: "",
         lets_encrypt: "",
         http2https: "",
+        initial_schedule: "",
         mail_mode: "",
         mail_from: "",
         smtp_host: "",
@@ -327,12 +388,20 @@ export default {
   computed: {
     ...mapState(["instanceName", "core", "appName"]),
     busy() {
-      return this.loading.getConfiguration || this.loading.configureModule;
+      return (
+        this.loading.getConfiguration ||
+        this.loading.configureModule ||
+        !!this.loading.resetPasswords
+      );
     },
     gruppen() {
       return [
         { key: "admins", title: "settings.admins", konten: this.admins },
-        { key: "mitarbeiter", title: "settings.staff", konten: this.mitarbeiter },
+        {
+          key: "mitarbeiter",
+          title: "settings.staff",
+          konten: this.mitarbeiter,
+        },
       ];
     },
   },
@@ -419,6 +488,10 @@ export default {
       this.host = config.host;
       this.isLetsEncryptEnabled = config.lets_encrypt;
       this.isHttpToHttpsEnabled = config.http2https;
+      this.initialSchedule = {
+        ...this.initialSchedule,
+        ...config.initial_schedule,
+      };
       this.mailMode = config.mail_mode;
       this.mailFrom = config.mail_from || "";
       this.smtp = {
@@ -442,6 +515,37 @@ export default {
       let firstInvalid = "";
       if (!this.host) {
         this.error.host = "common.required";
+        firstInvalid = firstInvalid || "host";
+      }
+      for (const [field, min, max] of [
+        ["weeks", 1, 52],
+        ["slot_minutes", 5, 180],
+        ["capacity", 1, 1000],
+      ]) {
+        const value = Number(this.initialSchedule[field]);
+        if (!Number.isInteger(value) || value < min || value > max) {
+          this.error.initial_schedule = "settings.invalid_initial_schedule";
+          firstInvalid = firstInvalid || "host";
+        }
+      }
+      if (this.initialSchedule.start_date) {
+        const value = this.initialSchedule.start_date;
+        const parsed = new Date(value + "T00:00:00Z");
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+          Number.isNaN(parsed.getTime()) ||
+          parsed.toISOString().slice(0, 10) !== value
+        ) {
+          this.error.initial_schedule = "settings.invalid_initial_schedule";
+          firstInvalid = firstInvalid || "host";
+        }
+      }
+      if (
+        !this.initialSchedule.location ||
+        (this.initialSchedule.contact_email &&
+          !/^[^@\s]+@[^@\s]+$/.test(this.initialSchedule.contact_email))
+      ) {
+        this.error.initial_schedule = "settings.invalid_initial_schedule";
         firstInvalid = firstInvalid || "host";
       }
       if (this.mailMode === "external") {
@@ -476,6 +580,12 @@ export default {
         http2https: this.isHttpToHttpsEnabled,
         mail_mode: this.mailMode,
         mail_from: this.mailFrom,
+      };
+      data.initial_schedule = {
+        ...this.initialSchedule,
+        weeks: Number(this.initialSchedule.weeks),
+        slot_minutes: Number(this.initialSchedule.slot_minutes),
+        capacity: Number(this.initialSchedule.capacity),
       };
       if (this.mailMode === "external") {
         data.smtp = {

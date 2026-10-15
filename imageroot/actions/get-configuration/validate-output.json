@@ -12,6 +12,9 @@
                 "type": "object",
                 "required": ["login", "name", "passwort"],
                 "properties": {
+        "initial_schedule": {
+            "type": "object"
+        },
                     "login": {"type": "string"},
                     "name": {"type": "string"},
                     "passwort": {"type": "string"}

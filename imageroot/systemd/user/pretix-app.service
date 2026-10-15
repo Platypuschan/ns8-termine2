@@ -19,7 +19,7 @@ TimeoutStartSec=300
 TimeoutStopSec=70
 ExecStartPre=/bin/rm -f %t/pretix-app.pid %t/pretix-app.ctr-id
 ExecStartPre=/usr/bin/touch mail.env
-ExecStartPre=-runagent discover-mail
+ExecStartPre=runagent discover-mail
 ExecStart=/usr/bin/podman run --conmon-pidfile %t/pretix-app.pid \
     --cidfile %t/pretix-app.ctr-id --cgroups=no-conmon \
     --pod-id-file %t/termine.pod-id --replace -d --name pretix-app \

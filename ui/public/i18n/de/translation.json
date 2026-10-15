@@ -64,7 +64,16 @@
     "confirm_regenerate_all": "Neue Passwörter für alle Admins und IT-Mitarbeiter erzeugen? Die bisherigen gelten danach nicht mehr.",
     "regenerating": "Passwörter neu erzeugen ({instance})",
     "accounts_not_created": "Die Konten werden beim ersten Speichern der Einstellungen angelegt",
-    "unknown_login": "Unbekanntes Konto"
+    "unknown_login": "Unbekanntes Konto",
+    "schedule_title": "Erste Terminserie",
+    "schedule_helper": "Nur bei der ersten Einrichtung. Startdatum leer: nächster Montag. Danach Termine und Kontingente in pretix bearbeiten. Zeiten: Mo–Fr 08:00–11:30 und 12:30–15:30 Uhr.",
+    "start_date": "Startdatum (optional)",
+    "weeks": "Wochen (1–52)",
+    "slot_minutes": "Minuten pro Termin (5–180)",
+    "capacity": "Plätze pro Termin (1–1000)",
+    "location": "Ort",
+    "contact_email": "Kontakt-E-Mail (leer = Absenderadresse)",
+    "invalid_initial_schedule": "Bitte gültiges Startdatum, Wochen (1–52), Minuten (5–180), Plätze (1–1000), Ort und Kontaktadresse prüfen."
   },
   "common": {
     "required": "erforderlich",

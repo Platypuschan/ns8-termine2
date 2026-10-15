@@ -1,10 +1,10 @@
-#!/bin/bash
-
-#
+#!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-#
+"""Konten mit Wiederaufnahme unvollständiger Passwortwechsel abgleichen."""
+import os
+import sys
 
-# Admins und IT-Mitarbeiter aus konten.json in pretix anlegen bzw. Passwörter setzen.
-set -Eeuo pipefail
-termine-warten
-podman exec -i pretix-app termine-entrypoint konten-sync <konten.json
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "pypkg"))
+import termine_setup
+
+termine_setup.sync_konten()

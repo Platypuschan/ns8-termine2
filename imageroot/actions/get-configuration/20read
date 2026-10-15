@@ -21,6 +21,9 @@ def smarthost():
         return None
 
 
+# Keine alten Zugangsdaten anzeigen, wenn ein Reset nach dem DB-Commit unterbrochen wurde.
+termine_setup.recover_konten()
+
 json.dump(termine_setup.configuration(
     termine_setup.read_settings(),
     termine_setup.read_konten(),
