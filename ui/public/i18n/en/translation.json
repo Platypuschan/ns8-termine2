@@ -73,7 +73,16 @@
     "confirm_regenerate_all": "Generate new passwords for all admins and IT staff? The current ones stop working.",
     "regenerating": "Regenerate passwords ({instance})",
     "accounts_not_created": "The accounts are created when the settings are saved for the first time",
-    "unknown_login": "Unknown account"
+    "unknown_login": "Unknown account",
+    "schedule_title": "Initial appointment series",
+    "schedule_helper": "First setup only. Leave the start date empty for next Monday. Afterwards edit appointments and quotas in pretix. Hours: Mon–Fri 08:00–11:30 and 12:30–15:30.",
+    "start_date": "Start date (optional)",
+    "weeks": "Weeks (1–52)",
+    "slot_minutes": "Minutes per appointment (5–180)",
+    "capacity": "Places per appointment (1–1000)",
+    "location": "Location",
+    "contact_email": "Contact email (empty = sender address)",
+    "invalid_initial_schedule": "Check start date, weeks (1–52), minutes (5–180), places (1–1000), location and contact email."
   },
   "about": {
     "title": "About"

@@ -6,7 +6,13 @@
 
 # Neue Smarthost-Einstellungen übernehmen (nur im Modus „Smarthost“).
 set -Eeuo pipefail
-if grep -q '"mail_mode": "external"' termine.json 2>/dev/null; then
+if python3 -c 'import json; print(json.load(open("termine.json")).get("mail_mode", "smarthost"))' 2>/dev/null | grep -qx external; then
     exit 0
 fi
-systemctl --user try-restart pretix-app.service
+# Zuerst mail.env erneuern; danach muss auch Cron die neuen Werte einlesen.
+# Ein fehlerhaftes discover-mail darf keinen Neustart mit veralteten Werten auslösen.
+if systemctl --user is-active --quiet pretix-app.service; then
+    runagent discover-mail
+    systemctl --user restart pretix-app.service
+    systemctl --user try-restart cron-app.service
+fi

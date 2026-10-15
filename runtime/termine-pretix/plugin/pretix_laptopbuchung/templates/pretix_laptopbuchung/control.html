@@ -1,4 +1,5 @@
 {% extends "pretixcontrol/event/base.html" %}
+{% load urlreplace %}
 {% block title %}Laptop-Anwender{% endblock %}
 {% block content %}
     <h1>Laptop-Anwender</h1>
@@ -147,4 +148,17 @@
             </button>
         {% endif %}
     </form>
+    {% if page_obj.has_other_pages %}
+        <nav aria-label="Anwenderseiten">
+            <ul class="pager">
+                {% if page_obj.has_previous %}
+                    <li class="previous"><a href="?{% url_replace request 'page' page_obj.previous_page_number %}">← Zurück</a></li>
+                {% endif %}
+                <li>Seite {{ page_obj.number }} von {{ page_obj.paginator.num_pages }}</li>
+                {% if page_obj.has_next %}
+                    <li class="next"><a href="?{% url_replace request 'page' page_obj.next_page_number %}">Weiter →</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
 {% endblock %}

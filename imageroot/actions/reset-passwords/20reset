@@ -8,7 +8,6 @@
 
 import json
 import os
-import subprocess
 import sys
 
 import agent
@@ -24,6 +23,4 @@ except termine_setup.SettingsError as error:
     json.dump([{"field": error.field, "parameter": error.field, "value": error.value, "error": error.error}],
               fp=sys.stdout)
     sys.exit(2)
-# In pretix übernehmen (pretix muss laufen)
-subprocess.run(["termine-konten-sync"], check=True, stdout=sys.stderr)
 json.dump({"geaendert": geaendert}, fp=sys.stdout)

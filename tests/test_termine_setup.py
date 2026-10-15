@@ -8,6 +8,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "imageroot", "pypkg"))
 import termine_setup as ts  # noqa: E402
@@ -17,6 +18,9 @@ class TermineSetupTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.d = self.tmp.name
+        self.sync = patch.object(ts, "_konten_uebernehmen")
+        self.apply = self.sync.start()
+        self.addCleanup(self.sync.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -75,6 +79,56 @@ class TermineSetupTest(unittest.TestCase):
         self.assertEqual(len(ts.passwoerter_neu(None, self.d)), 12)
         with self.assertRaises(ts.SettingsError):
             ts.passwoerter_neu("unbekannt@x.org", self.d)
+
+    def test_fehlgeschlagener_reset_behaelt_alte_anzeige_und_journal(self):
+        vorher = ts.ensure_konten("termine.x.org", self.d)
+        self.apply.side_effect = RuntimeError("Container ausgefallen")
+        with self.assertRaises(RuntimeError):
+            ts.passwoerter_neu(vorher["admins"][0]["login"], self.d)
+        self.assertEqual(ts.read_konten(self.d), vorher)
+        journal = os.path.join(self.d, ts.KONTEN_PENDING)
+        with open(journal) as stream:
+            geplant = json.load(stream)
+        self.assertNotEqual(geplant["admins"][0]["passwort"], vorher["admins"][0]["passwort"])
+        self.assertEqual(geplant["mitarbeiter"], vorher["mitarbeiter"])
+        self.apply.side_effect = None
+        ts.sync_konten(self.d)
+        self.assertEqual(ts.read_konten(self.d), geplant)
+        self.assertFalse(os.path.exists(journal))
+
+    def test_abbruch_nach_db_commit_wird_wiederaufgenommen(self):
+        vorher = ts.ensure_konten("termine.x.org", self.d)
+        original_replace = os.replace
+        def replace(src, dst):
+            if str(src).endswith(ts.KONTEN_PENDING):
+                raise OSError("Dateisystem vorübergehend ausgefallen")
+            return original_replace(src, dst)
+        with patch.object(ts.os, "replace", side_effect=replace):
+            with self.assertRaises(OSError):
+                ts.passwoerter_neu(vorher["admins"][0]["login"], self.d)
+        applied = self.apply.call_args.args[0]
+        ts.sync_konten(self.d)
+        self.assertEqual(ts.read_konten(self.d), applied)
+
+    def test_terminserie_wird_validiert_und_als_umgebung_geschrieben(self):
+        request = {"initial_schedule": {"start_date": "2099-01-05", "weeks": 3,
+                   "slot_minutes": 15, "capacity": 4, "location": "IT, Raum 2",
+                   "contact_email": "help@example.org"}}
+        ts.apply_request(request, self.d)
+        ts.write_database_env(self.d)
+        ts.write_pretix_env("termine.x.org", self.d)
+        env = ts.read_envfile(os.path.join(self.d, ts.PRETIX_ENV))
+        self.assertEqual(env["TERMINE_STARTDATUM"], "2099-01-05")
+        self.assertEqual(env["TERMINE_PLAETZE"], "4")
+        self.assertEqual(env["TERMINE_SLOT_MINUTEN"], "15")
+        self.assertEqual(env["TERMINE_ORT"], "IT, Raum 2")
+        before = ts.read_settings(self.d)
+        for update in ({"weeks": 0}, {"slot_minutes": 1}, {"capacity": True},
+                       {"location": "Ort\nENV=1"}, {"start_date": "2026-02-30"},
+                       {"start_date": "2000-01-01"}, {"contact_email": "keine-mail"}):
+            with self.subTest(update=update), self.assertRaises(ts.SettingsError):
+                ts.apply_request({"initial_schedule": update}, self.d)
+            self.assertEqual(ts.read_settings(self.d), before)
 
     def test_env_dateien(self):
         ts.write_database_env(self.d)

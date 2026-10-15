@@ -12,13 +12,20 @@ Dateien im Modulzustand (state/, alle nur für den Modulbenutzer lesbar):
   mail.env       Mail-Konfiguration für pretix, bei jedem Start von pretix neu erzeugt (bin/discover-mail)
 """
 
+import datetime as dt
+import fcntl
 import json
 import os
+import re
 import secrets
 import string
+import subprocess
+import sys
+from zoneinfo import ZoneInfo
 
 SETTINGS_FILE = "termine.json"
 KONTEN_FILE = "konten.json"
+KONTEN_PENDING = "konten.pending.json"
 DATABASE_ENV = "database.env"
 PRETIX_ENV = "pretix.env"
 MAIL_ENV = "mail.env"
@@ -44,6 +51,8 @@ def _schreiben(path, inhalt):
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(inhalt)
+        f.flush()
+        os.fsync(f.fileno())
     os.replace(tmp, path)
 
 
@@ -75,6 +84,13 @@ def read_settings(state_dir="."):
     s = _json_lesen(os.path.join(state_dir, SETTINGS_FILE), {})
     s.setdefault("mail_mode", "smarthost")
     s.setdefault("mail_from", "")
+    s.setdefault("initial_schedule", {})
+    defaults = {
+        "start_date": "", "weeks": 2, "slot_minutes": 30, "capacity": 2,
+        "location": "IT-Abteilung", "contact_email": "",
+    }
+    for key, value in defaults.items():
+        s["initial_schedule"].setdefault(key, value)
     s.setdefault("external", {})
     ext = s["external"]
     ext.setdefault("host", "")
@@ -118,6 +134,33 @@ def apply_request(data, state_dir="."):
         if ext["encryption"] not in VERSCHLUESSELUNG:
             raise SettingsError("smtp_encryption", ext["encryption"], "invalid_smtp_encryption")
         s["external"] = ext
+    if "initial_schedule" in data:
+        schedule = dict(s["initial_schedule"])
+        schedule.update(data["initial_schedule"])
+        for key in ("start_date", "location", "contact_email"):
+            value = str(schedule[key]).strip()
+            if any(c in value for c in ("\n", "\r")):
+                raise SettingsError("initial_schedule", key, "invalid_initial_schedule")
+            schedule[key] = value
+        if schedule["start_date"]:
+            try:
+                start = dt.date.fromisoformat(schedule["start_date"])
+                today = dt.datetime.now(ZoneInfo("Europe/Berlin")).date()
+                if start <= today and (
+                    not read_konten(state_dir) or schedule["start_date"] != s["initial_schedule"]["start_date"]
+                ):
+                    raise ValueError("Das Startdatum muss in der Zukunft liegen.")
+            except ValueError:
+                raise SettingsError("initial_schedule", "start_date", "invalid_initial_schedule") from None
+        for key, minimum, maximum in (("weeks", 1, 52), ("slot_minutes", 5, 180), ("capacity", 1, 1000)):
+            value = schedule[key]
+            if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+                raise SettingsError("initial_schedule", key, "invalid_initial_schedule")
+        if not schedule["location"] or len(schedule["location"]) > 255:
+            raise SettingsError("initial_schedule", "location", "invalid_initial_schedule")
+        if schedule["contact_email"] and not re.fullmatch(r"[^@\s]+@[^@\s]+", schedule["contact_email"]):
+            raise SettingsError("initial_schedule", "contact_email", "invalid_initial_schedule")
+        s["initial_schedule"] = schedule
     _schreiben(os.path.join(state_dir, SETTINGS_FILE), json.dumps(s, indent=2))
     return s
 
@@ -145,20 +188,58 @@ def ensure_konten(domain, state_dir="."):
     return konten
 
 
-def passwoerter_neu(login=None, state_dir="."):
-    """Erzeugt neue Passwörter für ein Konto (login) oder für alle (login=None). Gibt die geänderten Logins zurück."""
-    konten = read_konten(state_dir)
-    if not konten:
-        raise SettingsError("login", login or "", "accounts_not_created")
-    geaendert = []
-    for konto in konten["admins"] + konten["mitarbeiter"]:
-        if login is None or konto["login"] == login:
-            konto["passwort"] = neues_passwort()
-            geaendert.append(konto["login"])
-    if login is not None and not geaendert:
-        raise SettingsError("login", login, "unknown_login")
-    _schreiben(os.path.join(state_dir, KONTEN_FILE), json.dumps(konten, indent=2))
-    return geaendert
+def _konten_uebernehmen(konten):
+    subprocess.run(["termine-warten"], check=True, stdout=sys.stderr)
+    subprocess.run(
+        ["podman", "exec", "-i", "pretix-app", "termine-entrypoint", "konten-sync"],
+        input=json.dumps(konten), text=True, check=True, stdout=sys.stderr,
+    )
+
+
+def _konten_abgleichen(login, reset, state_dir, uebernehmen):
+    """Journal vor DB-Änderung schreiben; nach Erfolg atomar freigeben.
+
+    Bei einem Abbruch nach dem DB-Commit wird dasselbe Journal erneut angewendet.
+    Das ist idempotent und verändert keine anderen Passwort-Hashes.
+    """
+    pending = os.path.join(state_dir, KONTEN_PENDING)
+    with open(os.path.join(state_dir, "konten.lock"), "a") as lock:
+        os.chmod(lock.name, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        # Auch nach einem verlorenen Prozess-/Container-Exit zuverlässig abschließen.
+        if os.path.exists(pending):
+            uebernehmen(_json_lesen(pending, None))
+            os.replace(pending, os.path.join(state_dir, KONTEN_FILE))
+        konten = read_konten(state_dir)
+        if not konten:
+            raise SettingsError("login", login or "", "accounts_not_created")
+        changed = []
+        if reset:
+            for konto in konten["admins"] + konten["mitarbeiter"]:
+                if login is None or konto["login"] == login:
+                    konto["passwort"] = neues_passwort()
+                    changed.append(konto["login"])
+            if login is not None and not changed:
+                raise SettingsError("login", login, "unknown_login")
+            _schreiben(pending, json.dumps(konten, indent=2))
+        uebernehmen(konten)
+        if reset:
+            os.replace(pending, os.path.join(state_dir, KONTEN_FILE))
+        return changed
+
+
+def passwoerter_neu(login=None, state_dir=".", uebernehmen=None):
+    """Passwörter erst nach erfolgreicher Übernahme anzeigen; fehlgeschlagene Übernahme wiederaufnehmen."""
+    return _konten_abgleichen(login, True, state_dir, uebernehmen or _konten_uebernehmen)
+
+
+def sync_konten(state_dir=".", uebernehmen=None):
+    _konten_abgleichen(None, False, state_dir, uebernehmen or _konten_uebernehmen)
+
+
+def recover_konten(state_dir="."):
+    if os.path.exists(os.path.join(state_dir, KONTEN_PENDING)):
+        sync_konten(state_dir)
 
 
 # --- Konfigurationsdateien ----------------------------------------------------------------------------------------
@@ -187,6 +268,8 @@ def read_envfile(path):
 
 def write_pretix_env(host, state_dir="."):
     db = read_envfile(os.path.join(state_dir, DATABASE_ENV))
+    settings = read_settings(state_dir)
+    schedule = settings["initial_schedule"]
     _env_schreiben(os.path.join(state_dir, PRETIX_ENV), {
         "PRETIX_PRETIX_INSTANCE_NAME": INSTANZ_NAME,
         "PRETIX_PRETIX_URL": f"https://{host}",
@@ -207,6 +290,12 @@ def write_pretix_env(host, state_dir="."):
         "PRETIX_CELERY_BACKEND": "redis://127.0.0.1:6379/1",
         "PRETIX_CELERY_BROKER": "redis://127.0.0.1:6379/2",
         "NUM_WORKERS": "2",
+        "TERMINE_STARTDATUM": schedule["start_date"],
+        "TERMINE_WOCHEN": schedule["weeks"],
+        "TERMINE_SLOT_MINUTEN": schedule["slot_minutes"],
+        "TERMINE_PLAETZE": schedule["capacity"],
+        "TERMINE_ORT": schedule["location"],
+        "TERMINE_KONTAKT": schedule["contact_email"],
     })
 
 
@@ -247,6 +336,7 @@ def configuration(settings, konten, host, http2https, lets_encrypt, smarthost):
         "host": host,
         "http2https": http2https,
         "lets_encrypt": lets_encrypt,
+        "initial_schedule": settings["initial_schedule"],
         "mail_mode": settings["mail_mode"],
         "mail_from": settings["mail_from"],
         "smtp": {

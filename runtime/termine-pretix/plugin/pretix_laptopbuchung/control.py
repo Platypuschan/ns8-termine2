@@ -24,8 +24,9 @@ def _url(request, name="control"):
     })
 
 
-def _gefiltert(request):
-    rows = anwender_status(request.event)
+def _gefiltert(request, rows=None):
+    if rows is None:
+        rows = anwender_status(request.event)
     welle, status, q = request.GET.get("welle", ""), request.GET.get("status", ""), request.GET.get("q", "").strip().lower()
     if welle:
         rows = [r for r in rows if r["tn"].welle == welle]
@@ -43,7 +44,11 @@ class AnwenderView(EventPermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         alle = anwender_status(self.request.event)
-        ctx["rows"] = _gefiltert(self.request)
+        from django.core.paginator import Paginator
+
+        page = Paginator(_gefiltert(self.request, alle), 100).get_page(self.request.GET.get("page"))
+        ctx["rows"] = page.object_list
+        ctx["page_obj"] = page
         ctx["wellen"] = sorted({r["tn"].welle for r in alle})
         ctx["status_choices"] = [(k, v[0]) for k, v in STATUS.items()]
         ctx["summen"] = [(k, STATUS[k][0], STATUS[k][1], sum(1 for r in alle if r["status"] == k)) for k in STATUS]

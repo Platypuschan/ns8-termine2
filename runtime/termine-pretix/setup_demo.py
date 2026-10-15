@@ -8,6 +8,8 @@ import os
 import sys
 from zoneinfo import ZoneInfo
 
+from terminplan import startdatum, zahl
+
 import django
 
 django.setup()
@@ -23,19 +25,21 @@ from pretix.base.models import (  # noqa: E402
 from pretix.base.reldate import RelativeDateWrapper  # noqa: E402
 
 TZ = ZoneInfo("Europe/Berlin")
-FIRST_DAY = dt.date(2026, 10, 19)  # Montag
-WEEKS = 2
-SLOT_MIN = 30
+FIRST_DAY = startdatum(os.environ.get("TERMINE_STARTDATUM", ""))
+WEEKS = zahl(os.environ, "TERMINE_WOCHEN", 2, 1, 52)
+SLOT_MIN = zahl(os.environ, "TERMINE_SLOT_MINUTEN", 30, 5, 180)
 # Zeitblöcke pro Werktag (Beginn, Ende); Mittagspause 11:30–12:30
 BLOCKS = [(dt.time(8, 0), dt.time(11, 30)), (dt.time(12, 30), dt.time(15, 30))]
-PER_SLOT = 2
+PER_SLOT = zahl(os.environ, "TERMINE_PLAETZE", 2, 1, 1000)
+LOCATION = os.environ.get("TERMINE_ORT") or "IT-Abteilung"
+CONTACT = os.environ.get("TERMINE_KONTAKT") or os.environ.get("PRETIX_MAIL_FROM", "")
 
 MAIL_TEXT = """Hallo {teilnehmer_name},
 
 Ihr Termin zur Abgabe Ihres Laptops ist gebucht:
 
 Termin:          {termin}
-Ort:             IT-Abteilung, Raum 0.12
+Ort:             __TERMINE_ORT__
 Inventarnummer:  {inventarnummer}
 
 Ihr Ticket-Code – bitte bei Abgabe und Abholung des Laptops vorzeigen:
@@ -95,7 +99,7 @@ with scopes_disabled(), transaction.atomic():
     ev = Event.objects.create(
         organizer=org, name="Laptop-Neuinstallation", slug="laptop",
         currency="EUR", date_from=first, has_subevents=True,
-        location="IT-Abteilung, Raum 0.12", live=True,
+        location=LOCATION, live=True,
         plugins="pretix.plugins.sendmail,pretix.plugins.statistics,pretix.plugins.ticketoutputpdf,"
                 "pretix.plugins.webcheckin,pretix_laptopbuchung",
     )
@@ -116,7 +120,7 @@ with scopes_disabled(), transaction.atomic():
     # Bestell-/Erinnerungsmails auch für Buchungen über den Kanal der Einladungslinks
     s.mail_sales_channel_placed_paid = ["web", "laptopbuchung"]
     s.mail_sales_channel_download_reminder = ["web", "laptopbuchung"]
-    s.contact_mail = "it-rollout@example.invalid"
+    s.contact_mail = CONTACT
     # laptopbuchung: eigene Templates, keine nachträglichen Änderungen der Angaben
     s.laptopbuchung_templates = "pretix_laptopbuchung"
     # Shop-Farben: Blautöne der Uniklinik-Homepage
@@ -124,11 +128,11 @@ with scopes_disabled(), transaction.atomic():
     s.theme_color_background = "#eef5fc"
     s.last_order_modification_date = RelativeDateWrapper(dt.datetime(2000, 1, 1, tzinfo=TZ))
     s.mail_subject_order_free = "Ihr Termin zur Laptop-Abgabe: {termin}"
-    s.mail_text_order_free = MAIL_TEXT
+    s.mail_text_order_free = MAIL_TEXT.replace("__TERMINE_ORT__", LOCATION)
     s.frontpage_text = (
-        "<p>Ihr Laptop wird neu installiert. Bitte wählen Sie einen 30-Minuten-Termin, "
+        f"<p>Ihr Laptop wird neu installiert. Bitte wählen Sie einen {SLOT_MIN}-Minuten-Termin, "
         "zu dem Sie das Gerät in der IT-Abteilung abgeben (Mo–Fr 8:00–11:30 und 12:30–15:30 Uhr). "
-        "Pro Termin sind maximal 2 Plätze verfügbar.</p>"
+        f"Pro Termin sind maximal {PER_SLOT} Plätze verfügbar.</p>"
     )
 
     # Produkt nur über den eigenen Verkaufskanal der Einladungslinks buchbar (nicht im normalen Shop)

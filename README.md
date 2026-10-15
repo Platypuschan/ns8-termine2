@@ -10,7 +10,12 @@ Einladungslinks, Terminzuweisung, Annahme/Ausgabe per Check-in, Tagesübersicht)
 add-module ghcr.io/platypuschan/termine2:latest 1
 ```
 
-Danach in der Modul-Oberfläche unter **Einstellungen** Adresse (FQDN) und Mailversand eintragen und speichern.
+Danach in der Modul-Oberfläche unter **Einstellungen** Adresse (FQDN), erste Terminserie und Mailversand eintragen und speichern.
+Ohne Startdatum beginnt eine neue Serie am nächsten Montag (Europe/Berlin); fest eingebaute Demo-Termine gibt es nicht.
+Wochen, Minuten pro Termin, Plätze pro Termin, Ort und Kontaktadresse sind für die erste Einrichtung konfigurierbar.
+Bestehende Veranstaltungen und Buchungen werden beim Speichern und Update nicht neu erzeugt. Spätere
+Terminänderungen erfolgen in pretix. Die Shop-Wochenansicht blättert ausschließlich mit den Pfeilen zur
+vorherigen beziehungsweise nächsten Woche; der persönliche Einladungslink bleibt dabei erhalten.
 Beim ersten Speichern
 
 - wird die Datenbank angelegt und pretix eingerichtet (Veranstalter `it`, Veranstaltung `laptop`, Termine, Teams),
@@ -23,6 +28,7 @@ Beim ersten Speichern
 | Bereich | Inhalt |
 |---|---|
 | Adresse | FQDN, Let's-Encrypt-Zertifikat, HTTP→HTTPS |
+| Erste Terminserie | Startdatum (leer = nächster Montag), 1–52 Wochen, 5–180 Minuten, 1–1000 Plätze, Ort und Kontaktadresse; nur bei erstmaliger Anlage wirksam |
 | E-Mail-Versand | **NS8-Smarthost** (Cluster-Einstellung, Änderungen werden automatisch übernommen) oder **externer SMTP-Server** (Server, Port, Verschlüsselung STARTTLS/SSL/keine, Benutzer, Passwort); Absenderadresse (leer = `no-reply@<adresse>`) |
 | Zugänge | Login, Name und Passwort aller Admins und IT-Mitarbeiter; Passwort anzeigen/kopieren, einzeln oder alle **neu erzeugen** |
 
@@ -54,10 +60,17 @@ Pod `termine` (rootless, nur `127.0.0.1:${TCP_PORT}` → Traefik):
 | `postgresql-app` | `postgres:16` | Datenbank (Volume `postgres-data`) |
 | `redis-app` | `redis:7` | Cache, Sitzungen, Warteschlange |
 
+Die Zugänge werden vom Modul verwaltet: Passwortänderungen unter **Einstellungen → Zugänge** ausführen.
+Ein normaler Kontenabgleich behält unveränderte Passwort-Hashes und laufende Sitzungen.
+Ein einzelner Passwort-Reset verändert nur das gewählte Konto. Während einer unterbrochenen Übernahme
+bewahrt `konten.pending.json` die neuen Daten auf; der nächste Abgleich beziehungsweise das Laden der
+Einstellungen setzt dieselbe Übernahme fort. Bis zum Abschluss werden keine möglicherweise veralteten
+Zugangsdaten angezeigt.
+
 Modulzustand (`state/`, nur für den Modulbenutzer lesbar): `termine.json` (Mail-Einstellungen), `konten.json`
 (Zugänge), `database.env`, `pretix.env`, `mail.env` (bei jedem Start von pretix neu erzeugt).
 
-**Sicherung:** `termine.json`, `konten.json`, `database.env`, ein `pg_dump` der Datenbank und das Volume
+**Sicherung:** `termine.json`, `konten.json`, ein gegebenenfalls vorhandenes `konten.pending.json`, `database.env`, ein `pg_dump` der Datenbank und das Volume
 `pretix-data`. Bei der Wiederherstellung wird die Datenbank eingespielt und die Konten werden erneut abgeglichen.
 
 ## Entwicklung
@@ -65,6 +78,11 @@ Modulzustand (`state/`, nur für den Modulbenutzer lesbar): `termine.json` (Mail
 - `runtime/termine-pretix/` enthält den übernommenen Stand von termine-pretix (siehe `runtime/VERSION`).
 - `build-images.sh` baut Modul-Image und (lokal) das Laufzeit-Image; der Tag des Laufzeit-Images ergibt sich aus
   dem Inhalt von `runtime/`.
-- Tests: `python3 -m unittest discover -s tests -p 'test_*.py'`; QEMU-Tests über den Workflow „Test module on QEMU“.
+- Unit-Tests: `python3 -m unittest discover -s tests -p 'test_*.py'`.
+- pretix-Regressionstests: In einer Python-Umgebung `pip install 'pretix==2026.8.0'` und
+  `pip install --no-deps -e runtime/termine-pretix/plugin`, danach `python tests/run-pretix-tests.py`.
+  Geprüft werden echte Bestelltransaktionen, CSV-Import, Kontenabgleich und gerenderte Wochennavigation
+  mit SQLite. PostgreSQL-Advisory-Locks werden dabei ersetzt; diese Prüfung ersetzt keinen NS8-Lauf.
+- QEMU-Tests über den Workflow „Test module on QEMU“.
 - **GHCR-Pakete** `termine2` und `termine2-runtime` müssen öffentlich sein, sonst können NS8 (und die QEMU-Tests)
   die Images nicht laden.

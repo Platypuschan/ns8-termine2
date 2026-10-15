@@ -106,3 +106,7 @@ dist
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Lokale Entwicklungswerkzeuge
+.venv/
+*.egg-info/
